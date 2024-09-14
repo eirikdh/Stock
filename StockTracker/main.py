@@ -138,5 +138,5 @@ def search_company(query):
 
 # ... (rest of the code remains the same)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
