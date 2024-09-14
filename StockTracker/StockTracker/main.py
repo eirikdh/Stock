@@ -8,12 +8,13 @@ import time
 import random
 import requests
 from alpha_vantage.timeseries import TimeSeries
+import os
 
 # Set page config
 st.set_page_config(page_title="Stock Data Visualization", layout="wide")
 
-# Alpha Vantage API key (you should use ask_secrets to get this from the user)
-ALPHA_VANTAGE_API_KEY = "YOUR_ALPHA_VANTAGE_API_KEY"
+# Alpha Vantage API key
+ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHA_VANTAGE_API_KEY")
 
 # Function to check Yahoo Finance API status
 def check_yahoo_finance_status():
@@ -123,6 +124,7 @@ def format_pe_ratio(pe_ratio):
 # Main app
 def main():
     st.title("Stock Data Visualization App")
+    st.write("Main function called successfully!")  # Added this line to confirm main() is called
 
     # Check Yahoo Finance API status
     if not check_yahoo_finance_status():
