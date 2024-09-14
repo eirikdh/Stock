@@ -123,6 +123,7 @@ def format_pe_ratio(pe_ratio):
 # Main app
 def main():
     st.title("Stock Data Visualization App")
+    st.write("Main function called successfully!")  # Added this line to confirm main() is called
 
     # Check Yahoo Finance API status
     if not check_yahoo_finance_status():
