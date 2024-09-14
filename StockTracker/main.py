@@ -81,7 +81,7 @@ def search_company(query):
                     logger.info(f"{query} is listed on {info.get('exchange')}. Treating it as a stock.")
                     return info['symbol']
 
-                st.warning(f"'{query}' is not identified as a stock. It appears to be a {info.get('quoteType', 'different financial instrument') }.")
+                st.warning(f"'{query}' is not identified as a stock. It appears to be a {info.get('quoteType', 'different financial instrument')}.")
                 return None
     except Exception as e:
         logger.error(f"Error during direct symbol lookup for {query}: {str(e)}")
@@ -125,9 +125,18 @@ def search_company(query):
 # Function to display financial information
 def display_financial_info(info):
     st.subheader("Company Information")
-    st.json(info)
-
-# ... (rest of the code remains the same)
+    relevant_info = {
+        "Name": info.get("longName", "N/A"),
+        "Symbol": info.get("symbol", "N/A"),
+        "Industry": info.get("industry", "N/A"),
+        "Market Cap": f"${info.get('marketCap', 0):,}",
+        "Current Price": f"${info.get('currentPrice', 0):.2f}",
+        "52 Week High": f"${info.get('fiftyTwoWeekHigh', 0):.2f}",
+        "52 Week Low": f"${info.get('fiftyTwoWeekLow', 0):.2f}",
+        "P/E Ratio": f"{info.get('trailingPE', 'N/A'):.2f}" if info.get('trailingPE') else "N/A",
+        "Dividend Yield": f"{info.get('dividendYield', 0):.2%}" if info.get('dividendYield') else "N/A",
+    }
+    st.json(relevant_info)
 
 # Main app
 def main():
@@ -169,10 +178,18 @@ def main():
             with col2:
                 end_date = st.date_input("End date", datetime.now())
 
+            if start_date >= end_date:
+                st.error("Error: Start date must be before end date.")
+                return
+
             # Function to update chart and table
             def update_chart_and_table():
-                hist_data = yf.download(symbol, start=start_date, end=end_date)
-                if hist_data is not None:
+                try:
+                    hist_data = yf.download(symbol, start=start_date, end=end_date)
+                    if hist_data.empty:
+                        st.warning("No data available for the selected date range.")
+                        return
+                    
                     # Display price history chart
                     st.subheader("Price History Chart")
                     fig = go.Figure(data=[go.Candlestick(x=hist_data.index, open=hist_data['Open'], high=hist_data['High'], low=hist_data['Low'], close=hist_data['Close'])])
@@ -192,6 +209,9 @@ def main():
                         file_name=f"{symbol}_stock_data.csv",
                         mime="text/csv",
                     )
+                except Exception as e:
+                    st.error(f"Error fetching stock data: {str(e)}")
+                    logger.error(f"Error fetching stock data for {symbol}: {str(e)}")
 
             # Initial update of chart and table
             update_chart_and_table()
