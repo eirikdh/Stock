@@ -30,23 +30,23 @@ def check_yahoo_finance_status():
 # Function to search for company symbols with fallback
 def search_company(query):
     try:
-        # First, try an exact match
+        # Search for companies using yfinance
         ticker = yf.Ticker(query)
-        if ticker.info:
-            return query
-
-        # If exact match fails, search for similar names
-        all_tickers = yf.Ticker('AAPL').info['symbol']  # This fetches a list of all available tickers
-        matches = process.extract(query, all_tickers, limit=5)
+        company_info = ticker.info
+        if company_info and 'symbol' in company_info:
+            return company_info['symbol']
         
-        if matches:
-            st.warning(f"Company '{query}' not found. Did you mean one of these?")
-            for match, score in matches:
-                if st.button(f"{match} (Similarity: {score}%)"):
-                    return match
+        # If no exact match, use fuzzy matching on a predefined list of popular stocks
+        popular_stocks = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'FB', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V']
+        matches = process.extract(query, popular_stocks, limit=5)
+        
+        st.warning(f"No exact match found for '{query}'. Did you mean one of these?")
+        for match, score in matches:
+            if st.button(f"{match} (Similarity: {score}%)"):
+                return match
         
         # Fallback: return a default stock symbol
-        st.warning(f"Company '{query}' not found. Falling back to default stock (AAPL).")
+        st.warning(f"No selection made. Falling back to default stock (AAPL).")
         return 'AAPL'
     except Exception as e:
         st.error(f"Error searching for company: {str(e)}")
@@ -124,7 +124,7 @@ def format_pe_ratio(pe_ratio):
 # Main app
 def main():
     st.title("Stock Data Visualization App")
-    st.write("Main function called successfully!")  # Added this line to confirm main() is called
+    st.write("Main function called successfully!")
 
     # Check Yahoo Finance API status
     if not check_yahoo_finance_status():
