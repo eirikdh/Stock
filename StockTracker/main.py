@@ -17,7 +17,7 @@ st.set_page_config(page_title="Stock Data Visualization", layout="wide")
 ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHA_VANTAGE_API_KEY")
 
 # Predefined list of common stock symbols (as fallback)
-FALLBACK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'FB', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'NFLX', 'DIS', 'ADBE', 'CRM', 'PYPL', 'NAS.OL']
+FALLBACK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'NFLX', 'DIS', 'ADBE', 'CRM', 'PYPL', 'NAS.OL']
 
 def fetch_all_stock_symbols():
     return FALLBACK_SYMBOLS
@@ -160,7 +160,7 @@ def main():
 
         # User input
         input_type = "Stock Symbol" # Assuming the intention was to default to "Stock Symbol"
-        symbol = st.text_input("Enter stock symbol (e.g., AAPL, 'GOOGL, MSFT, AMZN, FB, TSLA, NVDA, JPM, JNJ, V, NFLX, DIS, ADBE, CRM, PYPL, NAS.OL):", "AAPL").upper()
+        symbol = st.text_input("Enter stock symbol (e.g., AAPL, 'GOOGL, MSFT, AMZN, META, TSLA, NVDA, JPM, JNJ, V, NFLX, DIS, ADBE, CRM, PYPL, NAS.OL):", "AAPL").upper()
 
         # Date range selection with input validation
         col1, col2 = st.columns(2)
