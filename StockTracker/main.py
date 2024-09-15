@@ -160,7 +160,7 @@ def main():
 
         # User input
         input_type = "Stock Symbol" # Assuming the intention was to default to "Stock Symbol"
-        symbol = st.text_input("Enter stock symbol (e.g., AAPL, GOOGL):", "AAPL").upper()
+        symbol = st.text_input("Enter stock symbol (e.g., AAPL, 'GOOGL, MSFT, AMZN, FB, TSLA, NVDA, JPM, JNJ, V, NFLX, DIS, ADBE, CRM, PYPL, NAS.OL):", "AAPL").upper()
 
         # Date range selection with input validation
         col1, col2 = st.columns(2)
