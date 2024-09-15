@@ -158,8 +158,9 @@ def main():
     try:
         st.info("Enter a stock symbol. For certain stocks, you can use extended symbols like 'NAS.OL' for Norwegian Air Shuttle.")
 
-        # Symbol input with autocomplete feature using selectbox
-        symbol = st.selectbox('Enter stock symbol:', options=STOCK_SYMBOLS)
+        # User input
+        input_type = "Stock Symbol" # Assuming the intention was to default to "Stock Symbol"
+        symbol = st.text_input("Enter stock symbol (e.g., AAPL, GOOGL):", "AAPL").upper()
 
         # Date range selection with input validation
         col1, col2 = st.columns(2)
