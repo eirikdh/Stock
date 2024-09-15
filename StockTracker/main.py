@@ -81,11 +81,11 @@ def fetch_alpha_vantage_data(symbol, start_date, end_date):
         hist = hist[(hist.index >= pd.to_datetime(start_date)) & (hist.index <= pd.to_datetime(end_date))]
         hist.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
         hist = hist.astype(float)
-        
+
         # Fetch current price from Alpha Vantage
         current_price_data, _ = ts.get_quote_endpoint(symbol=symbol)
         current_price = current_price_data['Global Quote']['05. price']
-        
+
         financial_info = {
             "symbol": symbol,
             "currentPrice": current_price,
@@ -157,9 +157,9 @@ def main():
 
     try:
         st.info("Enter a stock symbol. For certain stocks, you can use extended symbols like 'NAS.OL' for Norwegian Air Shuttle.")
-        
-        # Symbol input without autocomplete
-        symbol = st.text_input('Enter stock symbol:', key='stock_symbol')
+
+        # Symbol input with autocomplete feature using selectbox
+        symbol = st.selectbox('Enter stock symbol:', options=STOCK_SYMBOLS)
 
         # Date range selection with input validation
         col1, col2 = st.columns(2)
@@ -176,45 +176,45 @@ def main():
             if not symbol:
                 st.error("Please enter a stock symbol.")
                 return
-            
+
             # Fetch stock data
             hist_data, info, data_source = get_stock_data(symbol, start_date, end_date)
 
             if hist_data is not None and info is not None:
                 st.success(f"Data retrieved successfully from {data_source}")
-                
+
                 if data_source == "Alpha Vantage":
                     st.warning("Limited data available. Some financial metrics may not be displayed.")
-                
+
                 # Display key financial information
                 st.subheader(f"Key Financial Information for {symbol}")
                 col1, col2, col3, col4 = st.columns(4)
-                
+
                 current_price = info.get('currentPrice', 'N/A')
                 col1.metric("Current Price", f"${format_number(current_price)}")
-                
+
                 market_cap = info.get('marketCap', 'N/A')
                 col2.metric("Market Cap", format_number(market_cap))
-                
+
                 pe_ratio = info.get('trailingPE', 'N/A')
                 col3.metric("P/E Ratio", format_pe_ratio(pe_ratio))
-                
+
                 fifty_two_week_high = info.get('fiftyTwoWeekHigh', 'N/A')
                 col4.metric("52 Week High", f"${format_number(fifty_two_week_high)}")
-                
+
                 # Additional financial information
                 st.subheader("Additional Financial Information")
                 col5, col6, col7, col8 = st.columns(4)
-                
+
                 fifty_two_week_low = info.get('fiftyTwoWeekLow', 'N/A')
                 col5.metric("52 Week Low", f"${format_number(fifty_two_week_low)}")
-                
+
                 volume = info.get('volume', 'N/A')
                 col6.metric("Volume", format_number(volume))
-                
+
                 avg_volume = info.get('averageVolume', 'N/A')
                 col7.metric("Avg Volume", format_number(avg_volume))
-                
+
                 dividend_yield = info.get('dividendYield', 'N/A')
                 if dividend_yield != 'N/A':
                     dividend_yield = f"{float(dividend_yield) * 100:.2f}%"
