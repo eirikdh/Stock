@@ -57,6 +57,10 @@ def get_stock_data(symbol, start_date, end_date, max_retries=3):
                 'beta': info.get('beta', 'N/A'),
                 'dayHigh': info.get('dayHigh', info.get('regularMarketDayHigh', 'N/A')),
                 'dayLow': info.get('dayLow', info.get('regularMarketDayLow', 'N/A')),
+                'longName': info.get('longName', 'N/A'),
+                'sector': info.get('sector', 'N/A'),
+                'industry': info.get('industry', 'N/A'),
+                'country': info.get('country', 'N/A'),
             }
 
             st.success(f"Successfully fetched data for {symbol} from Yahoo Finance")
@@ -98,7 +102,11 @@ def fetch_alpha_vantage_data(symbol, start_date, end_date):
             "dividendYield": 'N/A',
             "beta": 'N/A',
             "dayHigh": 'N/A',
-            "dayLow": 'N/A'
+            "dayLow": 'N/A',
+            "longName": 'N/A',
+            "sector": 'N/A',
+            "industry": 'N/A',
+            "country": 'N/A',
         }
         st.success(f"Successfully fetched basic data for {symbol} from Alpha Vantage")
         return hist, financial_info, "Alpha Vantage"
@@ -220,6 +228,16 @@ def main():
                 if dividend_yield != 'N/A':
                     dividend_yield = f"{float(dividend_yield) * 100:.2f}%"
                 col8.metric("Dividend Yield", dividend_yield)
+
+                # New section for additional company information
+                st.subheader("Company Information")
+                with st.expander("View Company Details"):
+                    col9, col10 = st.columns(2)
+                    col9.metric("Company Name", info.get('longName', 'N/A'))
+                    col10.metric("Country", info.get('country', 'N/A'))
+                    col11, col12 = st.columns(2)
+                    col11.metric("Sector", info.get('sector', 'N/A'))
+                    col12.metric("Industry", info.get('industry', 'N/A'))
 
                 # Display price history chart
                 st.subheader("Price History Chart")
