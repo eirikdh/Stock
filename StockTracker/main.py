@@ -11,11 +11,25 @@ import os
 import json
 
 # Set page config
-st.set_page_config(page_title="Stock Data Visualization", layout="wide")
-base='dark'
-primaryColor='#00FF00'
-backgroundColor='#000000'
-textColor='#00FF00'
+st.set_page_config(
+    page_title='Stock Data Visualization',
+    layout='wide',
+    initial_sidebar_state='expanded',
+    menu_items=None
+)
+
+# Set page theme
+st.markdown(
+    '''
+    <style>
+    .stApp {
+        background-color: #000000;
+        color: #00FF00;
+    }
+    </style>
+    ''',
+    unsafe_allow_html=True
+)
 
 # Alpha Vantage API key
 ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHA_VANTAGE_API_KEY")
@@ -134,7 +148,7 @@ def create_price_chart(data):
         yaxis_title='Price',
         xaxis_title='Date',
         height=600,
-        template='plotly_white'
+        template='plotly_dark'
     )
     return fig
 
