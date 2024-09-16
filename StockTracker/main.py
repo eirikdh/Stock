@@ -16,7 +16,7 @@ st.set_page_config(
     layout='wide',
     initial_sidebar_state='expanded',
     menu_items=None
-(
+)
 # Alpha Vantage API key
 ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHA_VANTAGE_API_KEY")
 
