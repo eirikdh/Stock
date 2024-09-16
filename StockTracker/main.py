@@ -12,6 +12,10 @@ import json
 
 # Set page config
 st.set_page_config(page_title="Stock Data Visualization", layout="wide")
+base='dark'
+primaryColor='#00FF00'
+backgroundColor='#000000'
+textColor='#00FF00'
 
 # Alpha Vantage API key
 ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHA_VANTAGE_API_KEY")
