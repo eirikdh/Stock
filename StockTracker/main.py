@@ -33,7 +33,7 @@ st.set_page_config(
 )
 
 # Alpha Vantage API key
-ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHA_VANTAGE_API_KEY")
+ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY")
 
 # NewsAPI key
 NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "YOUR_NEWS_API_KEY")
@@ -100,6 +100,10 @@ def get_stock_data(symbol, start_date, end_date, max_retries=3):
 def fetch_alpha_vantage_data(symbol, start_date, end_date):
     st.info("Attempting to fetch data from Alpha Vantage...")
     try:
+        if not ALPHA_VANTAGE_API_KEY:
+            st.error("Alpha Vantage API key is not set. Please set the ALPHA_VANTAGE_API_KEY environment variable.")
+            return None, None, None
+
         ts = TimeSeries(key=ALPHA_VANTAGE_API_KEY)
         data, _ = ts.get_daily(symbol=symbol, outputsize='full')
         hist = pd.DataFrame(data).T
@@ -217,6 +221,10 @@ def get_sentiment_analysis(symbol, max_retries=3):
 
     def fetch_news_alpha_vantage(symbol):
         try:
+            if not ALPHA_VANTAGE_API_KEY:
+                logger.error("Alpha Vantage API key is not set. Please set the ALPHA_VANTAGE_API_KEY environment variable.")
+                return None
+
             fd = FundamentalData(key=ALPHA_VANTAGE_API_KEY)
             data, _ = fd.get_company_overview(symbol)
             news = data.get('Description', '')
@@ -240,28 +248,28 @@ def get_sentiment_analysis(symbol, max_retries=3):
         positive_words = ['up', 'rise', 'gain', 'positive', 'profit', 'growth', 'increase', 'improved', 'recovery', 'bullish', 'outperform', 'beat', 'exceed', 'strong', 'success']
         negative_words = ['down', 'fall', 'loss', 'negative', 'decline', 'decrease', 'drop', 'bearish', 'underperform', 'miss', 'below', 'concern', 'weak', 'fail', 'risk']
         neutral_words = ['stable', 'steady', 'unchanged', 'flat', 'maintain', 'hold', 'mixed', 'balanced', 'neutral', 'fair']
-        
+
         words = text.lower().split()
         positive_count = sum(word in positive_words for word in words)
         negative_count = sum(word in negative_words for word in words)
         neutral_count = sum(word in neutral_words for word in words)
-        
+
         total_count = positive_count + negative_count + neutral_count
         if total_count == 0:
             return "Neutral", {'pos': 0.33, 'neu': 0.34, 'neg': 0.33, 'compound': 0}, "Improved Keyword Analysis"
-        
+
         pos_score = positive_count / total_count
         neg_score = negative_count / total_count
         neu_score = neutral_count / total_count
         compound_score = (pos_score - neg_score) / (1 - min(pos_score, neg_score))
-        
+
         if compound_score > 0.05:
             overall_sentiment = "Positive"
         elif compound_score < -0.05:
             overall_sentiment = "Negative"
         else:
             overall_sentiment = "Neutral"
-        
+
         return overall_sentiment, {'pos': pos_score, 'neu': neu_score, 'neg': neg_score, 'compound': compound_score}, "Improved Keyword Analysis"
 
     default_sentiment = "Neutral"
@@ -281,17 +289,17 @@ def get_sentiment_analysis(symbol, max_retries=3):
             if not news_text:
                 logger.warning(f"No news content found from {source_name}")
                 continue
-            
+
             sia = SentimentIntensityAnalyzer()
             sentiment_scores = sia.polarity_scores(news_text)
-            
+
             if sentiment_scores['compound'] > 0.05:
                 overall_sentiment = "Positive"
             elif sentiment_scores['compound'] < -0.05:
                 overall_sentiment = "Negative"
             else:
                 overall_sentiment = "Neutral"
-            
+
             logger.info(f"Successfully analyzed sentiment for {symbol} using {source_name}")
             result = (overall_sentiment, sentiment_scores, source_name)
             st.session_state[cache_key] = result
@@ -404,14 +412,14 @@ def main():
                 # Sentiment Analysis
                 st.subheader("Sentiment Analysis")
                 overall_sentiment, sentiment_scores, sentiment_source = get_sentiment_analysis(symbol)
-                
+
                 # Add emojis to sentiment display
                 sentiment_emojis = {
                     "Positive": "😊",
                     "Neutral": "😐",
                     "Negative": "☹️"
                 }
-                
+
                 st.write(f"Overall Sentiment: {sentiment_emojis[overall_sentiment]} {overall_sentiment}")
                 st.write(f"Sentiment Source: {sentiment_source}")
                 if sentiment_scores:
