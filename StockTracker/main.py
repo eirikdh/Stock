@@ -7,6 +7,22 @@ import time
 import random
 from alpha_vantage.timeseries import TimeSeries
 import os
+import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
+from newspaper import Article
+import requests
+from requests.exceptions import RequestException
+from alpha_vantage.fundamentaldata import FundamentalData
+import hashlib
+import json
+import logging
+
+# Download NLTK data
+nltk.download('vader_lexicon', quiet=True)
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Set page config
 st.set_page_config(
@@ -18,6 +34,9 @@ st.set_page_config(
 
 # Alpha Vantage API key
 ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHA_VANTAGE_API_KEY")
+
+# NewsAPI key
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "YOUR_NEWS_API_KEY")
 
 # Predefined list of common stock symbols (as fallback)
 FALLBACK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'NFLX', 'DIS', 'ADBE', 'CRM', 'PYPL', 'NAS.OL']
@@ -165,6 +184,126 @@ def format_pe_ratio(pe_ratio):
 def is_mobile():
     return st.session_state.get('is_mobile', False)
 
+# Updated function for sentiment analysis with improved error handling, delays, and fallback methods
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_sentiment_analysis(symbol, max_retries=3):
+    # Check cache first
+    cache_key = f"sentiment_{symbol}"
+    cached_result = st.session_state.get(cache_key)
+    if cached_result:
+        logger.info(f"Returning cached sentiment analysis for {symbol}")
+        return cached_result
+
+    def fetch_news_yahoo(symbol, max_retries=3):
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        url = f"https://finance.yahoo.com/quote/{symbol}/news"
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                articles = Article(url)
+                articles.download()
+                articles.parse()
+                return articles.text
+            except Exception as e:
+                logger.warning(f"Error fetching news from Yahoo Finance (Attempt {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt < max_retries - 1:
+                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    logger.info(f"Retrying Yahoo Finance in {wait_time:.2f} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"Failed to fetch news from Yahoo Finance after {max_retries} attempts")
+                    raise
+
+    def fetch_news_alpha_vantage(symbol):
+        try:
+            fd = FundamentalData(key=ALPHA_VANTAGE_API_KEY)
+            data, _ = fd.get_company_overview(symbol)
+            news = data.get('Description', '')
+            return news
+        except Exception as e:
+            logger.error(f"Error fetching news from Alpha Vantage: {str(e)}")
+            raise
+
+    def fetch_news_newsapi(symbol):
+        try:
+            url = f"https://newsapi.org/v2/everything?q={symbol}&apiKey={NEWS_API_KEY}&language=en&sortBy=publishedAt&pageSize=5"
+            response = requests.get(url)
+            response.raise_for_status()
+            articles = response.json().get('articles', [])
+            return ' '.join([article.get('title', '') + ' ' + article.get('description', '') for article in articles])
+        except Exception as e:
+            logger.error(f"Error fetching news from NewsAPI: {str(e)}")
+            raise
+
+    def improved_keyword_sentiment(text):
+        positive_words = ['up', 'rise', 'gain', 'positive', 'profit', 'growth', 'increase', 'improved', 'recovery', 'bullish', 'outperform', 'beat', 'exceed', 'strong', 'success']
+        negative_words = ['down', 'fall', 'loss', 'negative', 'decline', 'decrease', 'drop', 'bearish', 'underperform', 'miss', 'below', 'concern', 'weak', 'fail', 'risk']
+        neutral_words = ['stable', 'steady', 'unchanged', 'flat', 'maintain', 'hold', 'mixed', 'balanced', 'neutral', 'fair']
+        
+        words = text.lower().split()
+        positive_count = sum(word in positive_words for word in words)
+        negative_count = sum(word in negative_words for word in words)
+        neutral_count = sum(word in neutral_words for word in words)
+        
+        total_count = positive_count + negative_count + neutral_count
+        if total_count == 0:
+            return "Neutral", {'pos': 0.33, 'neu': 0.34, 'neg': 0.33, 'compound': 0}, "Improved Keyword Analysis"
+        
+        pos_score = positive_count / total_count
+        neg_score = negative_count / total_count
+        neu_score = neutral_count / total_count
+        compound_score = (pos_score - neg_score) / (1 - min(pos_score, neg_score))
+        
+        if compound_score > 0.05:
+            overall_sentiment = "Positive"
+        elif compound_score < -0.05:
+            overall_sentiment = "Negative"
+        else:
+            overall_sentiment = "Neutral"
+        
+        return overall_sentiment, {'pos': pos_score, 'neu': neu_score, 'neg': neg_score, 'compound': compound_score}, "Improved Keyword Analysis"
+
+    default_sentiment = "Neutral"
+    default_scores = {'pos': 0.33, 'neu': 0.34, 'neg': 0.33, 'compound': 0}
+    default_source = "Default"
+
+    news_sources = [
+        ("Yahoo Finance", fetch_news_yahoo),
+        ("Alpha Vantage", fetch_news_alpha_vantage),
+        ("NewsAPI", fetch_news_newsapi)
+    ]
+
+    for source_name, fetch_function in news_sources:
+        try:
+            logger.info(f"Attempting to fetch news for {symbol} from {source_name}")
+            news_text = fetch_function(symbol)
+            if not news_text:
+                logger.warning(f"No news content found from {source_name}")
+                continue
+            
+            sia = SentimentIntensityAnalyzer()
+            sentiment_scores = sia.polarity_scores(news_text)
+            
+            if sentiment_scores['compound'] > 0.05:
+                overall_sentiment = "Positive"
+            elif sentiment_scores['compound'] < -0.05:
+                overall_sentiment = "Negative"
+            else:
+                overall_sentiment = "Neutral"
+            
+            logger.info(f"Successfully analyzed sentiment for {symbol} using {source_name}")
+            result = (overall_sentiment, sentiment_scores, source_name)
+            st.session_state[cache_key] = result
+            return result
+        except Exception as e:
+            logger.error(f"Error performing sentiment analysis using {source_name}: {str(e)}")
+
+    logger.warning(f"All news sources failed. Using improved keyword-based sentiment analysis for {symbol}")
+    result = improved_keyword_sentiment(symbol)
+    st.session_state[cache_key] = result
+    return result
+
 # Main app
 def main():
     st.title("Stock Data Visualization App")
@@ -261,6 +400,27 @@ def main():
                     cols = st.columns(1 if is_mobile() else 2)
                     cols[0].metric("Sector", info.get('sector', 'N/A'))
                     cols[1 if not is_mobile() else 0].metric("Industry", info.get('industry', 'N/A'))
+
+                # Sentiment Analysis
+                st.subheader("Sentiment Analysis")
+                overall_sentiment, sentiment_scores, sentiment_source = get_sentiment_analysis(symbol)
+                
+                # Add emojis to sentiment display
+                sentiment_emojis = {
+                    "Positive": "😊",
+                    "Neutral": "😐",
+                    "Negative": "☹️"
+                }
+                
+                st.write(f"Overall Sentiment: {sentiment_emojis[overall_sentiment]} {overall_sentiment}")
+                st.write(f"Sentiment Source: {sentiment_source}")
+                if sentiment_scores:
+                    st.write("Sentiment Scores:")
+                    cols = st.columns(4)
+                    cols[0].metric("Positive", f"{sentiment_scores['pos']:.2f}")
+                    cols[1].metric("Neutral", f"{sentiment_scores['neu']:.2f}")
+                    cols[2].metric("Negative", f"{sentiment_scores['neg']:.2f}")
+                    cols[3].metric("Compound", f"{sentiment_scores['compound']:.2f}")
 
                 # Display price history chart
                 st.subheader("Price History Chart")
