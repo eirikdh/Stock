@@ -45,7 +45,7 @@ def fetch_all_stock_symbols():
     return FALLBACK_SYMBOLS
 
 # Use this function to update STOCK_SYMBOLS
-@st.cache_data(ttl=86400)  # Cache for 24 hours
+@st.cache_data(ttl=80)  # Cache for 24 hours
 def load_stock_symbols():
     return fetch_all_stock_symbols()
 
