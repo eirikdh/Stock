@@ -5,10 +5,8 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import time
 import random
-import requests
 from alpha_vantage.timeseries import TimeSeries
 import os
-import json
 
 # Set page config
 st.set_page_config(
