@@ -17,6 +17,7 @@ st.set_page_config(
     initial_sidebar_state='expanded',
     menu_items=None
 )
+
 # Alpha Vantage API key
 ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHA_VANTAGE_API_KEY")
 
@@ -133,7 +134,7 @@ def create_price_chart(data):
         title='Stock Price History',
         yaxis_title='Price',
         xaxis_title='Date',
-        height=600,
+        height=300 if is_mobile() else 600,
         template='plotly_dark'
     )
     return fig
@@ -162,10 +163,31 @@ def format_pe_ratio(pe_ratio):
     else:
         return "N/A"
 
+# Function to detect mobile view
+def is_mobile():
+    return st.session_state.get('is_mobile', False)
+
 # Main app
 def main():
     st.title("Stock Data Visualization App")
     st.write("Main function called successfully!")
+
+    # Add mobile view toggle
+    st.session_state.is_mobile = st.checkbox('Mobile view', value=st.session_state.get('is_mobile', False))
+
+    # Adjust font sizes and padding for better readability on small screens
+    st.markdown('''
+        <style>
+        @media (max-width: 768px) {
+            .stApp {
+                font-size: 14px;
+            }
+            .stButton>button {
+                padding: 0.5rem 1rem;
+            }
+        }
+        </style>
+    ''', unsafe_allow_html=True)
 
     try:
         st.info("Enter a stock symbol. For certain stocks, you can use extended symbols like 'NAS.OL' for Norwegian Air Shuttle.")
@@ -201,47 +223,46 @@ def main():
 
                 # Display key financial information
                 st.subheader(f"Key Financial Information for {symbol}")
-                col1, col2, col3, col4 = st.columns(4)
+                cols = st.columns(1 if is_mobile() else 4)
 
                 current_price = info.get('currentPrice', 'N/A')
-                col1.metric("Current Price", f"${format_number(current_price)}")
+                cols[0].metric("Current Price", f"${format_number(current_price)}")
 
                 market_cap = info.get('marketCap', 'N/A')
-                col2.metric("Market Cap", format_number(market_cap))
+                cols[1 if not is_mobile() else 0].metric("Market Cap", format_number(market_cap))
 
                 pe_ratio = info.get('trailingPE', 'N/A')
-                col3.metric("P/E Ratio", format_pe_ratio(pe_ratio))
+                cols[2 if not is_mobile() else 0].metric("P/E Ratio", format_pe_ratio(pe_ratio))
 
                 fifty_two_week_high = info.get('fiftyTwoWeekHigh', 'N/A')
-                col4.metric("52 Week High", f"${format_number(fifty_two_week_high)}")
+                cols[3 if not is_mobile() else 0].metric("52 Week High", f"${format_number(fifty_two_week_high)}")
 
                 # Additional financial information
-                st.subheader("Additional Financial Information")
-                col5, col6, col7, col8 = st.columns(4)
+                with st.expander("Additional Financial Information"):
+                    cols = st.columns(1 if is_mobile() else 4)
 
-                fifty_two_week_low = info.get('fiftyTwoWeekLow', 'N/A')
-                col5.metric("52 Week Low", f"${format_number(fifty_two_week_low)}")
+                    fifty_two_week_low = info.get('fiftyTwoWeekLow', 'N/A')
+                    cols[0].metric("52 Week Low", f"${format_number(fifty_two_week_low)}")
 
-                volume = info.get('volume', 'N/A')
-                col6.metric("Volume", format_number(volume))
+                    volume = info.get('volume', 'N/A')
+                    cols[1 if not is_mobile() else 0].metric("Volume", format_number(volume))
 
-                avg_volume = info.get('averageVolume', 'N/A')
-                col7.metric("Avg Volume", format_number(avg_volume))
+                    avg_volume = info.get('averageVolume', 'N/A')
+                    cols[2 if not is_mobile() else 0].metric("Avg Volume", format_number(avg_volume))
 
-                dividend_yield = info.get('dividendYield', 'N/A')
-                if dividend_yield != 'N/A':
-                    dividend_yield = f"{float(dividend_yield) * 100:.2f}%"
-                col8.metric("Dividend Yield", dividend_yield)
+                    dividend_yield = info.get('dividendYield', 'N/A')
+                    if dividend_yield != 'N/A':
+                        dividend_yield = f"{float(dividend_yield) * 100:.2f}%"
+                    cols[3 if not is_mobile() else 0].metric("Dividend Yield", dividend_yield)
 
-                # New section for additional company information
-                st.subheader("Company Information")
-                with st.expander("View Company Details"):
-                    col9, col10 = st.columns(2)
-                    col9.metric("Company Name", info.get('longName', 'N/A'))
-                    col10.metric("Country", info.get('country', 'N/A'))
-                    col11, col12 = st.columns(2)
-                    col11.metric("Sector", info.get('sector', 'N/A'))
-                    col12.metric("Industry", info.get('industry', 'N/A'))
+                # Company information
+                with st.expander("Company Information"):
+                    cols = st.columns(1 if is_mobile() else 2)
+                    cols[0].metric("Company Name", info.get('longName', 'N/A'))
+                    cols[1 if not is_mobile() else 0].metric("Country", info.get('country', 'N/A'))
+                    cols = st.columns(1 if is_mobile() else 2)
+                    cols[0].metric("Sector", info.get('sector', 'N/A'))
+                    cols[1 if not is_mobile() else 0].metric("Industry", info.get('industry', 'N/A'))
 
                 # Display price history chart
                 st.subheader("Price History Chart")
@@ -252,7 +273,10 @@ def main():
                 st.subheader("Financial Data Table")
                 df_display = hist_data[['Open', 'High', 'Low', 'Close', 'Volume']].reset_index()
                 df_display['Date'] = pd.to_datetime(df_display['Date']).dt.date
-                st.dataframe(df_display)
+                if is_mobile():
+                    st.dataframe(df_display[['Date', 'Close', 'Volume']], use_container_width=True)
+                else:
+                    st.dataframe(df_display, use_container_width=True)
 
                 # Download button for CSV
                 csv = df_display.to_csv(index=False)
