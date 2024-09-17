@@ -33,10 +33,10 @@ st.set_page_config(
 )
 
 # Alpha Vantage API key
-ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "YOUR_ALPHA_VANTAGE_API_KEY")
+ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "9D9LN0NWQAXBHHJH")
 
 # NewsAPI key
-NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "YOUR_NEWS_API_KEY")
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "1acd5f9978ce48e9b6781013a54b736d")
 
 # Predefined list of common stock symbols (as fallback)
 FALLBACK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'NFLX', 'DIS', 'ADBE', 'CRM', 'PYPL', 'NAS.OL']
@@ -45,7 +45,7 @@ def fetch_all_stock_symbols():
     return FALLBACK_SYMBOLS
 
 # Use this function to update STOCK_SYMBOLS
-@st.cache_data(ttl=80)  # Cache for 24 hours
+@st.cache_data(ttl=86400)  # Cache for 24 hours
 def load_stock_symbols():
     return fetch_all_stock_symbols()
 
