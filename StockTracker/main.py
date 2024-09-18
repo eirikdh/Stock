@@ -336,6 +336,14 @@ def main():
         # User input
         symbol = st.text_input("Enter stock symbol (e.g., AAPL, GOOGL, MSFT, AMZN, META, TSLA, NVDA, JPM, JNJ, V, NFLX, DIS, ADBE, CRM, PYPL, NAS.OL):", "AAPL").upper()
 
+        col1, col2 = st.columns(2)
+        with col1:
+            symbol_dropdown = st.selectbox("Select a stock symbol:", STOCK_SYMBOLS)
+        with col2:
+            symbol_input = st.text_input("Or enter a custom stock symbol:")
+        
+        symbol = symbol_input.upper() if symbol_input else symbol_dropdown
+
         # Date range selection with input validation
         col1, col2 = st.columns(2)
         with col1:
