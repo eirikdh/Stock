@@ -55,14 +55,13 @@ STOCK_SYMBOLS = load_stock_symbols()
 def get_stock_data(symbol, start_date, end_date, max_retries=3):
     for attempt in range(max_retries):
         try:
-            st.info(f"Attempting to fetch data for {symbol} from Yahoo Finance (Attempt {attempt + 1}/{max_retries})")
             stock = yf.Ticker(symbol)
             hist = stock.history(start=start_date, end=end_date)
             info = stock.info
 
             # Check if info dictionary is empty or contains only NULL values
             if not info or all(v is None for v in info.values()):
-                st.warning(f"Limited or no data available for {symbol} from Yahoo Finance. Falling back to Alpha Vantage.")
+                logger.warning(f"Limited or no data available for {symbol} from Yahoo Finance. Falling back to Alpha Vantage.")
                 return fetch_alpha_vantage_data(symbol, start_date, end_date)
 
             # Extract all available financial information
@@ -85,23 +84,23 @@ def get_stock_data(symbol, start_date, end_date, max_retries=3):
                 'country': info.get('country', 'N/A'),
             }
 
-            st.success(f"Successfully fetched data for {symbol} from Yahoo Finance")
+            logger.info(f"Successfully fetched data for {symbol} from Yahoo Finance")
             return hist, financial_info, "Yahoo Finance"
         except Exception as e:
-            st.warning(f"Error fetching data from Yahoo Finance for {symbol} (Attempt {attempt + 1}/{max_retries}): {str(e)}")
+            logger.warning(f"Error fetching data from Yahoo Finance for {symbol} (Attempt {attempt + 1}/{max_retries}): {str(e)}")
             if attempt < max_retries - 1:
                 wait_time = (2 ** attempt) + random.uniform(0, 1)  # Exponential backoff with jitter
-                st.info(f"Retrying in {wait_time:.2f} seconds...")
+                logger.info(f"Retrying in {wait_time:.2f} seconds...")
                 time.sleep(wait_time)
             else:
-                st.error(f"Failed to fetch data from Yahoo Finance for {symbol} after {max_retries} attempts")
+                logger.error(f"Failed to fetch data from Yahoo Finance for {symbol} after {max_retries} attempts")
                 return fetch_alpha_vantage_data(symbol, start_date, end_date)
 
 def fetch_alpha_vantage_data(symbol, start_date, end_date):
-    st.info("Attempting to fetch data from Alpha Vantage...")
+    logger.info("Attempting to fetch data from Alpha Vantage...")
     try:
         if not ALPHA_VANTAGE_API_KEY:
-            st.error("Alpha Vantage API key is not set. Please set the ALPHA_VANTAGE_API_KEY environment variable.")
+            logger.error("Alpha Vantage API key is not set. Please set the ALPHA_VANTAGE_API_KEY environment variable.")
             return None, None, None
 
         ts = TimeSeries(key=ALPHA_VANTAGE_API_KEY)
@@ -134,10 +133,10 @@ def fetch_alpha_vantage_data(symbol, start_date, end_date):
             "industry": 'N/A',
             "country": 'N/A',
         }
-        st.success(f"Successfully fetched basic data for {symbol} from Alpha Vantage")
+        logger.info(f"Successfully fetched basic data for {symbol} from Alpha Vantage")
         return hist, financial_info, "Alpha Vantage"
     except Exception as av_e:
-        st.error(f"Failed to fetch data from Alpha Vantage: {str(av_e)}")
+        logger.error(f"Failed to fetch data from Alpha Vantage: {str(av_e)}")
         return None, None, None
 
 # Function to create price history chart
@@ -315,7 +314,6 @@ def get_sentiment_analysis(symbol, max_retries=3):
 # Main app
 def main():
     st.title("Stock Data Visualization App")
-    st.write("Main function called successfully!")
 
     # Add mobile view toggle
     st.session_state.is_mobile = st.checkbox('Mobile view', value=st.session_state.get('is_mobile', False))
@@ -335,11 +333,8 @@ def main():
     ''', unsafe_allow_html=True)
 
     try:
-        st.info("Enter a stock symbol. For certain stocks, you can use extended symbols like 'NAS.OL' for Norwegian Air Shuttle.")
-
         # User input
-        input_type = "Stock Symbol" # Assuming the intention was to default to "Stock Symbol"
-        symbol = st.text_input("Enter stock symbol (e.g., AAPL, 'GOOGL, MSFT, AMZN, META, TSLA, NVDA, JPM, JNJ, V, NFLX, DIS, ADBE, CRM, PYPL, NAS.OL):", "AAPL").upper()
+        symbol = st.text_input("Enter stock symbol (e.g., AAPL, GOOGL, MSFT, AMZN, META, TSLA, NVDA, JPM, JNJ, V, NFLX, DIS, ADBE, CRM, PYPL, NAS.OL):", "AAPL").upper()
 
         # Date range selection with input validation
         col1, col2 = st.columns(2)
@@ -361,8 +356,6 @@ def main():
             hist_data, info, data_source = get_stock_data(symbol, start_date, end_date)
 
             if hist_data is not None and info is not None:
-                st.success(f"Data retrieved successfully from {data_source}")
-
                 if data_source == "Alpha Vantage":
                     st.warning("Limited data available. Some financial metrics may not be displayed.")
 
