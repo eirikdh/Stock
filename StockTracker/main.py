@@ -38,16 +38,13 @@ ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY")
 # NewsAPI key
 NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "YOUR_NEWS_API_KEY")
 
-# Predefined list of common stock symbols (as fallback)
-FALLBACK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'NFLX', 'DIS', 'ADBE', 'CRM', 'PYPL', 'NAS.OL']
-
 def fetch_all_stock_symbols():
     try:
         with open('/StockTracker/all_tickers.txt', 'r') as file:
             return [line.strip() for line in file if line.strip()]
     except FileNotFoundError:
         logger.warning("all_tickers.txt not found. Using fallback symbols.")
-        return FALLBACK_SYMBOLS
+        return ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'NFLX', 'DIS', 'ADBE', 'CRM', 'PYPL', 'NAS.OL']
 
 # Use this function to update STOCK_SYMBOLS
 @st.cache_data(ttl=86400)  # Cache for 24 hours
@@ -167,8 +164,6 @@ def main():
                 hist_data, info = fetch_stock_data(symbol, start_date, end_date)
 
                 if hist_data is not None and info is not None:
-                    st.success(f"Data retrieved successfully for {symbol}")
-                    
                     # Display basic information
                     st.subheader(f"Stock Information for {symbol}")
                     st.write(f"Company Name: {info.get('longName', 'N/A')}")
