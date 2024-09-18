@@ -39,7 +39,7 @@ FALLBACK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'JP
 
 def load_stock_symbols():
     try:
-        with open('all_tickers.txt', 'r') as file:
+        with open('StockTracker/all_tickers.txt', 'r') as file:
             symbols = [line.strip() for line in file]
         return symbols
     except Exception as e:
