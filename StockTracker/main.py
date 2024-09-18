@@ -40,7 +40,7 @@ NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "YOUR_NEWS_API_KEY")
 
 def fetch_all_stock_symbols():
     try:
-        with open('/StockTracker/all_tickers.txt', 'r') as file:
+        with open('StockTracker/all_tickers.txt', 'r') as file:
             return [line.strip() for line in file if line.strip()]
     except FileNotFoundError:
         logger.warning("all_tickers.txt not found. Using fallback symbols.")
