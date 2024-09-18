@@ -16,6 +16,7 @@ from alpha_vantage.fundamentaldata import FundamentalData
 import hashlib
 import json
 import logging
+from bs4 import BeautifulSoup
 
 # Download NLTK data
 nltk.download('vader_lexicon', quiet=True)
@@ -42,7 +43,17 @@ NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
 FALLBACK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'NFLX', 'DIS', 'ADBE', 'CRM', 'PYPL', 'NAS.OL']
 
 def fetch_all_stock_symbols():
-    return FALLBACK_SYMBOLS
+    url = "https://stockanalysis.com/stocks/"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+        symbol_elements = soup.select('table tbody tr td:first-child a')
+        symbols = [element.text.strip() for element in symbol_elements]
+        return symbols
+    except Exception as e:
+        logger.error(f"Error fetching stock symbols: {str(e)}")
+        return FALLBACK_SYMBOLS
 
 # Use this function to update STOCK_SYMBOLS
 @st.cache_data(ttl=86400)  # Cache for 24 hours
@@ -334,8 +345,6 @@ def main():
 
     try:
         # User input
-        symbol = st.text_input("Enter stock symbol (e.g., AAPL, GOOGL, MSFT, AMZN, META, TSLA, NVDA, JPM, JNJ, V, NFLX, DIS, ADBE, CRM, PYPL, NAS.OL):", "AAPL").upper()
-
         col1, col2 = st.columns(2)
         with col1:
             symbol_dropdown = st.selectbox("Select a stock symbol:", STOCK_SYMBOLS)
