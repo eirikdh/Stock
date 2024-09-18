@@ -113,21 +113,39 @@ def main():
     st.write("Main function called successfully!")
 
     # Add mobile view toggle
-    st.session_state.is_mobile = st.checkbox('Mobile view', value=st.session_state.get('is_mobile', False))
+    is_mobile = st.checkbox('Mobile view', value=False, key='mobile_view')
 
-    # Adjust font sizes and padding for better readability on small screens
-    st.markdown('''
-        <style>
-        @media (max-width: 768px) {
+    # Adjust layout and styling based on mobile view
+    if is_mobile:
+        st.markdown("""
+            <style>
             .stApp {
+                max-width: 100%;
+                padding: 1rem;
                 font-size: 14px;
             }
-            .stButton>button {
-                padding: 0.5rem 1rem;
+            .stButton > button {
+                width: 100%;
+                margin-bottom: 1rem;
             }
-        }
-        </style>
-    ''', unsafe_allow_html=True)
+            .stPlotlyChart {
+                height: 300px !important;
+            }
+            .dataframe {
+                font-size: 10px;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+            <style>
+            .stApp {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 2rem;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
     try:
         st.info("Select a stock symbol from the dropdown or enter a custom symbol.")
@@ -173,12 +191,17 @@ def main():
                     # Display price history chart
                     st.subheader("Price History")
                     fig = go.Figure(data=go.Scatter(x=hist_data.index, y=hist_data['Close'], mode='lines'))
-                    fig.update_layout(title=f"{symbol} Stock Price", xaxis_title="Date", yaxis_title="Price")
-                    st.plotly_chart(fig)
+                    fig.update_layout(
+                        title=f"{symbol} Stock Price",
+                        xaxis_title="Date",
+                        yaxis_title="Price",
+                        height=500 if not is_mobile else 300
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
 
                     # Display data table
                     st.subheader("Historical Data")
-                    st.dataframe(hist_data)
+                    st.dataframe(hist_data, height=300 if not is_mobile else 200)
 
                     # Fetch and display sentiment analysis
                     st.subheader("Sentiment Analysis")
