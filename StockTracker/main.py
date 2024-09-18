@@ -43,7 +43,7 @@ FALLBACK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'JP
 
 def fetch_all_stock_symbols():
     try:
-        with open('StockTracker/all_tickers.txt', 'r') as file:
+        with open('/StockTracker/all_tickers.txt', 'r') as file:
             return [line.strip() for line in file if line.strip()]
     except FileNotFoundError:
         logger.warning("all_tickers.txt not found. Using fallback symbols.")
@@ -143,6 +143,10 @@ def main():
         else:
             symbol = st.text_input("Enter custom stock symbol:", "").upper()
 
+        # Validate the entered symbol
+        if symbol and symbol not in STOCK_SYMBOLS:
+            st.warning(f"The symbol '{symbol}' is not in our list of known stocks. Please make sure it's correct.")
+
         # Date range selection with input validation
         col1, col2 = st.columns(2)
         with col1:
@@ -187,7 +191,7 @@ def main():
                         articles = fetch_news_articles(symbol)
                         if articles:
                             overall_sentiment, avg_score = get_overall_sentiment(articles)
-                            st.write(f"Overall Sentiment: {overall_sentiment}")
+                            st.write(f"Overall Sentiment: {overall_sentiment} {':slight_frown:' if overall_sentiment == 'Negative' else ':neutral_face:' if overall_sentiment == 'Neutral' else ':slight_smile:'}")
                             st.write(f"Average Sentiment Score: {avg_score:.2f}")
 
                             st.subheader("Recent News Articles")
@@ -196,7 +200,8 @@ def main():
                                 st.write(f"Source: {article['source']['name']}")
                                 st.write(f"Published: {article['publishedAt']}")
                                 st.write(article['description'])
-                                st.write("---")
+                                st.markdown(f"[Read More]({article['url']})")
+                                st.write('---')
                         else:
                             st.warning("No recent news articles found for this stock.")
                 else:
