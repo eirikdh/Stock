@@ -227,7 +227,7 @@ def main():
                                 st.write(f"Source: {article['source']['name']}")
                                 st.write(f"Published: {article['publishedAt']}")
                                 st.write(article['description'])
-                                st.markdown(f"[Read More]({article['url']})")
+                                st.markdown(f"[Read More at {article['source']['name']} ↗]({article['url']})", unsafe_allow_html=True)
                                 st.write('---')
                         else:
                             st.warning("No recent news articles found for this stock.")
