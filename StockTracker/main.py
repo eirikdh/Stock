@@ -17,14 +17,14 @@ import hashlib
 import json
 import logging
 
-# Download NLTK data
-nltk.download('vader_lexicon', quiet=True)
-
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Set page config
+try:
+    nltk.download('vader_lexicon', quiet=True)
+except Exception as e:
+    logger.error(f"Failed to download NLTK data: {str(e)}")
+
 st.set_page_config(
     page_title='Stock Data Visualization',
     layout='wide',
@@ -32,28 +32,23 @@ st.set_page_config(
     menu_items=None
 )
 
-# Alpha Vantage API key
 ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY")
-
-# NewsAPI key
 NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "YOUR_NEWS_API_KEY")
 
 def fetch_all_stock_symbols():
     try:
-        with open('StockTracker/all_tickers.txt', 'r') as file:
+        with open('all_tickers.txt', 'r') as file:
             return [line.strip() for line in file if line.strip()]
     except FileNotFoundError:
         logger.warning("all_tickers.txt not found. Using fallback symbols.")
         return ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'NFLX', 'DIS', 'ADBE', 'CRM', 'PYPL', 'NAS.OL']
 
-# Use this function to update STOCK_SYMBOLS
-@st.cache_data(ttl=86400)  # Cache for 24 hours
+@st.cache_data(ttl=86400)
 def load_stock_symbols():
     return fetch_all_stock_symbols()
 
 STOCK_SYMBOLS = load_stock_symbols()
 
-# Function to fetch stock data
 def fetch_stock_data(symbol, start_date, end_date):
     try:
         logger.info(f"Fetching data for {symbol} from {start_date} to {end_date}")
@@ -65,57 +60,70 @@ def fetch_stock_data(symbol, start_date, end_date):
         logger.error(f"Error fetching data for {symbol}: {str(e)}")
         return None, None
 
-# Function to fetch news articles
+@st.cache_data(ttl=3600)
 def fetch_news_articles(symbol, num_articles=5):
     try:
         url = f"https://newsapi.org/v2/everything?q={symbol}&apiKey={NEWS_API_KEY}&language=en&sortBy=publishedAt&pageSize={num_articles}"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
         articles = response.json().get('articles', [])
         return articles
-    except Exception as e:
+    except RequestException as e:
         logger.error(f"Error fetching news for {symbol}: {str(e)}")
         return []
+    except Exception as e:
+        logger.error(f"Unexpected error fetching news for {symbol}: {str(e)}")
+        return []
 
-# Function to perform sentiment analysis
 def analyze_sentiment(text):
-    sia = SentimentIntensityAnalyzer()
-    sentiment_scores = sia.polarity_scores(text)
-    compound_score = sentiment_scores['compound']
-    
-    if compound_score > 0.05:
-        sentiment = "Positive"
-    elif compound_score < -0.05:
-        sentiment = "Negative"
-    else:
-        sentiment = "Neutral"
-    
-    return sentiment, compound_score
+    try:
+        sia = SentimentIntensityAnalyzer()
+        sentiment_scores = sia.polarity_scores(text)
+        compound_score = sentiment_scores['compound']
+        
+        if compound_score > 0.5:
+            sentiment = "Very Positive"
+        elif 0.1 <= compound_score <= 0.5:
+            sentiment = "Positive"
+        elif -0.1 < compound_score < 0.1:
+            sentiment = "Neutral"
+        elif -0.5 <= compound_score <= -0.1:
+            sentiment = "Negative"
+        else:
+            sentiment = "Very Negative"
+        
+        return sentiment, compound_score
+    except Exception as e:
+        logger.error(f"Error in sentiment analysis: {str(e)}")
+        return "Error", 0
 
-# Function to get overall sentiment from articles
+@st.cache_data(ttl=3600)
 def get_overall_sentiment(articles):
     if not articles:
         return "N/A", 0
 
-    total_score = 0
-    for article in articles:
-        text = article['title'] + ' ' + article['description']
-        _, score = analyze_sentiment(text)
-        total_score += score
+    try:
+        total_score = 0
+        sentiments = []
+        for article in articles:
+            text = article['title'] + ' ' + article['description']
+            sentiment, score = analyze_sentiment(text)
+            total_score += score
+            sentiments.append(sentiment)
 
-    avg_score = total_score / len(articles)
-    overall_sentiment, _ = analyze_sentiment(str(avg_score))
-    return overall_sentiment, avg_score
+        avg_score = total_score / len(articles)
+        overall_sentiment = max(set(sentiments), key=sentiments.count)
+        return overall_sentiment, avg_score
+    except Exception as e:
+        logger.error(f"Error in overall sentiment calculation: {str(e)}")
+        return "Error", 0
 
-# Main app
 def main():
     st.title("Stock Data Visualization App")
     st.write("Main function called successfully!")
 
-    # Add mobile view toggle
     is_mobile = st.checkbox('Mobile view', value=False, key='mobile_view')
 
-    # Adjust layout and styling based on mobile view
     if is_mobile:
         st.markdown("""
             <style>
@@ -150,7 +158,6 @@ def main():
     try:
         st.info("Select a stock symbol from the dropdown or enter a custom symbol.")
 
-        # User input
         input_type = st.radio("Choose input method:", ("Dropdown", "Custom"))
         
         if input_type == "Dropdown":
@@ -158,11 +165,9 @@ def main():
         else:
             symbol = st.text_input("Enter custom stock symbol:", "").upper()
 
-        # Validate the entered symbol
         if symbol and symbol not in STOCK_SYMBOLS:
             st.warning(f"The symbol '{symbol}' is not in our list of known stocks. Please make sure it's correct.")
 
-        # Date range selection with input validation
         col1, col2 = st.columns(2)
         with col1:
             start_date = st.date_input("Start date", datetime.now() - timedelta(days=365))
@@ -182,13 +187,11 @@ def main():
                 hist_data, info = fetch_stock_data(symbol, start_date, end_date)
 
                 if hist_data is not None and info is not None:
-                    # Display basic information
                     st.subheader(f"Stock Information for {symbol}")
                     st.write(f"Company Name: {info.get('longName', 'N/A')}")
                     st.write(f"Current Price: ${info.get('currentPrice', 'N/A')}")
                     st.write(f"Market Cap: ${info.get('marketCap', 'N/A'):,}")
 
-                    # Display price history chart
                     st.subheader("Price History")
                     fig = go.Figure(data=go.Scatter(x=hist_data.index, y=hist_data['Close'], mode='lines'))
                     fig.update_layout(
@@ -199,21 +202,27 @@ def main():
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
-                    # Display data table
                     st.subheader("Historical Data")
                     st.dataframe(hist_data, height=300 if not is_mobile else 200)
 
-                    # Fetch and display sentiment analysis
                     st.subheader("Sentiment Analysis")
                     with st.spinner("Fetching and analyzing news articles..."):
                         articles = fetch_news_articles(symbol)
                         if articles:
                             overall_sentiment, avg_score = get_overall_sentiment(articles)
-                            st.write(f"Overall Sentiment: {overall_sentiment} {':slight_frown:' if overall_sentiment == 'Negative' else ':neutral_face:' if overall_sentiment == 'Neutral' else ':slight_smile:'}")
+                            sentiment_emoji = {
+                                "Very Positive": ":star-struck:",
+                                "Positive": ":smile:",
+                                "Neutral": ":neutral_face:",
+                                "Negative": ":slightly_frowning_face:",
+                                "Very Negative": ":worried:",
+                                "Error": ":warning:"
+                            }
+                            st.write(f"Overall Sentiment: {overall_sentiment} {sentiment_emoji.get(overall_sentiment, '')}")
                             st.write(f"Average Sentiment Score: {avg_score:.2f}")
 
                             st.subheader("Recent News Articles")
-                            for article in articles[:3]:  # Display top 3 articles
+                            for article in articles[:3]:
                                 st.write(f"**{article['title']}**")
                                 st.write(f"Source: {article['source']['name']}")
                                 st.write(f"Published: {article['publishedAt']}")
