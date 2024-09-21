@@ -55,7 +55,33 @@ def fetch_stock_data(symbol, start_date, end_date):
         stock = yf.Ticker(symbol)
         hist = stock.history(start=start_date, end=end_date)
         info = stock.info
-        return hist, info
+        
+        # Extract more detailed information
+        detailed_info = {
+            'longName': info.get('longName', 'N/A'),
+            'sector': info.get('sector', 'N/A'),
+            'industry': info.get('industry', 'N/A'),
+            'country': info.get('country', 'N/A'),
+            'website': info.get('website', 'N/A'),
+            'marketCap': info.get('marketCap', 'N/A'),
+            'forwardPE': info.get('forwardPE', 'N/A'),
+            'trailingPE': info.get('trailingPE', 'N/A'),
+            'dividendYield': info.get('dividendYield', 'N/A'),
+            'bookValue': info.get('bookValue', 'N/A'),
+            'priceToBook': info.get('priceToBook', 'N/A'),
+            'returnOnEquity': info.get('returnOnEquity', 'N/A'),
+            'returnOnAssets': info.get('returnOnAssets', 'N/A'),
+            'debtToEquity': info.get('debtToEquity', 'N/A'),
+            'currentRatio': info.get('currentRatio', 'N/A'),
+            'quickRatio': info.get('quickRatio', 'N/A'),
+            'beta': info.get('beta', 'N/A'),
+            'fiftyTwoWeekHigh': info.get('fiftyTwoWeekHigh', 'N/A'),
+            'fiftyTwoWeekLow': info.get('fiftyTwoWeekLow', 'N/A'),
+            'averageVolume': info.get('averageVolume', 'N/A'),
+            'fullTimeEmployees': info.get('fullTimeEmployees', 'N/A'),
+        }
+        
+        return hist, detailed_info
     except Exception as e:
         logger.error(f"Error fetching data for {symbol}: {str(e)}")
         return None, None
@@ -188,11 +214,43 @@ def main():
 
                 if hist_data is not None and info is not None:
                     st.subheader(f"Stock Information for {symbol}")
-                    st.write(f"Company Name: {info.get('longName', 'N/A')}")
-                    st.write(f"Current Price: ${info.get('currentPrice', 'N/A')}")
-                    st.write(f"Market Cap: ${info.get('marketCap', 'N/A'):,}")
+                    
+                    # Company Overview
+                    st.write("### Company Overview")
+                    st.write(f"Company Name: {info['longName']}")
+                    st.write(f"Sector: {info['sector']}")
+                    st.write(f"Industry: {info['industry']}")
+                    st.write(f"Country: {info['country']}")
+                    st.write(f"Website: [{info['website']}]({info['website']})")
+                    st.write(f"Full-time Employees: {info['fullTimeEmployees']:,}")
 
-                    st.subheader("Price History")
+                    # Financial Metrics
+                    st.write("### Financial Metrics")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Market Cap", f"${info['marketCap']:,.0f}" if isinstance(info['marketCap'], (int, float)) else 'N/A')
+                        st.metric("Forward P/E", f"{info['forwardPE']:.2f}" if isinstance(info['forwardPE'], (int, float)) else 'N/A')
+                        st.metric("Trailing P/E", f"{info.get('trailingPE', 'N/A')}" if isinstance(info.get('trailingPE'), (int, float)) else 'N/A')
+                    with col2:
+                        st.metric("Price to Book", f"{info['priceToBook']:.2f}" if isinstance(info['priceToBook'], (int, float)) else 'N/A')
+                        st.metric("Return on Equity", f"{info['returnOnEquity']:.2%}" if isinstance(info['returnOnEquity'], (int, float)) else 'N/A')
+                        st.metric("Return on Assets", f"{info['returnOnAssets']:.2%}" if isinstance(info['returnOnAssets'], (int, float)) else 'N/A')
+                    with col3:
+                        st.metric("Debt to Equity", f"{info['debtToEquity']:.2f}" if isinstance(info['debtToEquity'], (int, float)) else 'N/A')
+                        st.metric("Current Ratio", f"{info['currentRatio']:.2f}" if isinstance(info['currentRatio'], (int, float)) else 'N/A')
+                        st.metric("Quick Ratio", f"{info['quickRatio']:.2f}" if isinstance(info['quickRatio'], (int, float)) else 'N/A')
+
+                    # Stock Performance
+                    st.write("### Stock Performance")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("52 Week High", f"${info['fiftyTwoWeekHigh']:.2f}" if isinstance(info['fiftyTwoWeekHigh'], (int, float)) else 'N/A')
+                    with col2:
+                        st.metric("52 Week Low", f"${info['fiftyTwoWeekLow']:.2f}" if isinstance(info['fiftyTwoWeekLow'], (int, float)) else 'N/A')
+                    with col3:
+                        st.metric("Average Volume", f"{info['averageVolume']:,.0f}" if isinstance(info['averageVolume'], (int, float)) else 'N/A')
+
+                    st.write("### Price History")
                     fig = go.Figure(data=go.Scatter(x=hist_data.index, y=hist_data['Close'], mode='lines'))
                     fig.update_layout(
                         title=f"{symbol} Stock Price",
