@@ -19,7 +19,7 @@ import logging
 import spacy
 from bs4 import BeautifulSoup
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 try:
@@ -42,7 +42,7 @@ NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
 
 def fetch_all_stock_symbols():
     try:
-        with open('StockTracker/all_tickers.txt', 'r') as file:
+        with open('all_tickers.txt', 'r') as file:
             return [line.strip() for line in file if line.strip()]
     except FileNotFoundError:
         logger.warning("all_tickers.txt not found. Using fallback symbols.")
@@ -93,23 +93,29 @@ def fetch_stock_data(symbol, start_date, end_date):
 def check_article_relevance(article, company_name, symbol):
     logger.debug(f"Checking relevance for article: {article.get('title', 'No title')}")
     
-    title = article.get('title', '').lower()
-    description = article.get('description', '').lower()
+    title = article.get('title', '').lower() if article.get('title') else ''
+    description = article.get('description', '').lower() if article.get('description') else ''
     content = title + ' ' + description
+    
+    logger.debug(f"Article content: {content[:100]}...")  # Log the first 100 characters of the content
     
     if nlp:
         try:
             doc = nlp(content)
             entities = [ent.text.lower() for ent in doc.ents if ent.label_ in ['ORG', 'PRODUCT']]
             
-            company_words = company_name.lower().split()
+            company_words = company_name.lower().split() if company_name else []
             is_relevant = any(word in entities for word in company_words) or symbol.lower() in entities
+            
+            logger.debug(f"Entities found: {entities}")
+            logger.debug(f"Is relevant (NLP): {is_relevant}")
         except Exception as e:
             logger.error(f"Error in NLP processing: {str(e)}")
             is_relevant = False
     else:
-        company_words = company_name.lower().split()
+        company_words = company_name.lower().split() if company_name else []
         is_relevant = any(word in content for word in company_words) or symbol.lower() in content
+        logger.debug(f"Is relevant (keyword): {is_relevant}")
     
     stock_keywords = ['stock', 'shares', 'market', 'investor', 'finance', 'earnings', 'revenue', 'profit', 'loss']
     has_stock_keyword = any(keyword in content for keyword in stock_keywords)
@@ -120,34 +126,69 @@ def check_article_relevance(article, company_name, symbol):
 
 def fetch_news_articles_fallback(symbol, company_name):
     logger.info(f"Using fallback method to fetch news for {symbol} ({company_name})")
+    articles = []
+    
+    # Yahoo Finance
     try:
         url = f"https://finance.yahoo.com/quote/{symbol}/news"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        articles = []
         
         for item in soup.find_all('li', class_='js-stream-content'):
-            title = item.find('h3').text if item.find('h3') else ''
-            link = item.find('a')['href'] if item.find('a') else ''
-            description = item.find('p').text if item.find('p') else ''
-            pub_date = item.find('span', class_='C(#959595)').text if item.find('span', class_='C(#959595)') else ''
-            
-            if title and link:
-                articles.append({
-                    'title': title,
-                    'url': f"https://finance.yahoo.com{link}" if link.startswith('/') else link,
-                    'description': description,
-                    'source': {'name': 'Yahoo Finance'},
-                    'publishedAt': pub_date
-                })
+            try:
+                title = item.find('h3').text if item.find('h3') else ''
+                link = item.find('a')['href'] if item.find('a') else ''
+                description = item.find('p').text if item.find('p') else ''
+                pub_date = item.find('span', class_='C(#959595)').text if item.find('span', class_='C(#959595)') else ''
+                
+                if title and link:
+                    articles.append({
+                        'title': title,
+                        'url': f"https://finance.yahoo.com{link}" if link.startswith('/') else link,
+                        'description': description,
+                        'source': {'name': 'Yahoo Finance'},
+                        'publishedAt': pub_date
+                    })
+            except Exception as e:
+                logger.error(f"Error processing Yahoo Finance article: {str(e)}")
         
         logger.info(f"Fetched {len(articles)} articles from Yahoo Finance")
-        return articles[:5]
     except Exception as e:
-        logger.error(f"Error in fallback news fetching for {symbol}: {str(e)}")
-        return []
+        logger.error(f"Error fetching news from Yahoo Finance for {symbol}: {str(e)}")
+    
+    # Google News (as an alternative source)
+    if len(articles) < 5:
+        try:
+            url = f"https://news.google.com/rss/search?q={symbol}+OR+{company_name}+when:7d&hl=en-US&gl=US&ceid=US:en"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'xml')
+            
+            for item in soup.find_all('item')[:10]:  # Limit to 10 items
+                try:
+                    title = item.title.text if item.title else ''
+                    link = item.link.text if item.link else ''
+                    description = item.description.text if item.description else ''
+                    pub_date = item.pubDate.text if item.pubDate else ''
+                    
+                    if title and link and check_article_relevance({'title': title, 'description': description}, company_name, symbol):
+                        articles.append({
+                            'title': title,
+                            'url': link,
+                            'description': description,
+                            'source': {'name': 'Google News'},
+                            'publishedAt': pub_date
+                        })
+                except Exception as e:
+                    logger.error(f"Error processing Google News article: {str(e)}")
+            
+            logger.info(f"Fetched {len(articles) - len(articles)} additional articles from Google News")
+        except Exception as e:
+            logger.error(f"Error fetching news from Google News for {symbol}: {str(e)}")
+    
+    return articles[:5]
 
 @st.cache_data(ttl=3600)
 def fetch_news_articles(symbol, company_name, num_articles=5):
