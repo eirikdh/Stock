@@ -89,11 +89,22 @@ def fetch_stock_data(symbol, start_date, end_date):
 @st.cache_data(ttl=3600)
 def fetch_news_articles(symbol, num_articles=5):
     try:
-        url = f"https://newsapi.org/v2/everything?q={symbol}&apiKey={NEWS_API_KEY}&language=en&sortBy=publishedAt&pageSize={num_articles}"
+        url = f"https://newsapi.org/v2/everything?q={symbol}&apiKey={NEWS_API_KEY}&language=en&sortBy=publishedAt&pageSize={num_articles * 2}"
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         articles = response.json().get('articles', [])
-        return articles[:num_articles]  # Ensure we return exactly num_articles
+        
+        # Remove duplicate articles based on title
+        unique_articles = []
+        seen_titles = set()
+        for article in articles:
+            if article['title'] not in seen_titles:
+                unique_articles.append(article)
+                seen_titles.add(article['title'])
+                if len(unique_articles) == num_articles:
+                    break
+        
+        return unique_articles
     except RequestException as e:
         logger.error(f"Error fetching news for {symbol}: {str(e)}")
         return []
@@ -118,7 +129,12 @@ def get_overall_sentiment(articles):
 
     try:
         total_score = sum(analyze_sentiment(article['title'] + ' ' + article['description']) for article in articles)
-        avg_score = total_score / len(articles)
+        num_articles = len(articles)
+        
+        if num_articles == 0:
+            return "N/A", 0
+        
+        avg_score = total_score / num_articles
         
         if avg_score > 0.5:
             overall_sentiment = "Very Positive"
