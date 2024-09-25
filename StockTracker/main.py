@@ -93,7 +93,7 @@ def fetch_news_articles(symbol, num_articles=5):
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         articles = response.json().get('articles', [])
-        return articles
+        return articles[:num_articles]  # Ensure we return exactly num_articles
     except RequestException as e:
         logger.error(f"Error fetching news for {symbol}: {str(e)}")
         return []
@@ -106,22 +106,10 @@ def analyze_sentiment(text):
         sia = SentimentIntensityAnalyzer()
         sentiment_scores = sia.polarity_scores(text)
         compound_score = sentiment_scores['compound']
-        
-        if compound_score > 0.5:
-            sentiment = "Very Positive"
-        elif 0.1 <= compound_score <= 0.5:
-            sentiment = "Positive"
-        elif -0.1 < compound_score < 0.1:
-            sentiment = "Neutral"
-        elif -0.5 <= compound_score <= -0.1:
-            sentiment = "Negative"
-        else:
-            sentiment = "Very Negative"
-        
-        return sentiment, compound_score
+        return compound_score
     except Exception as e:
         logger.error(f"Error in sentiment analysis: {str(e)}")
-        return "Error", 0
+        return 0
 
 @st.cache_data(ttl=3600)
 def get_overall_sentiment(articles):
@@ -129,16 +117,20 @@ def get_overall_sentiment(articles):
         return "N/A", 0
 
     try:
-        total_score = 0
-        sentiments = []
-        for article in articles:
-            text = article['title'] + ' ' + article['description']
-            sentiment, score = analyze_sentiment(text)
-            total_score += score
-            sentiments.append(sentiment)
-
+        total_score = sum(analyze_sentiment(article['title'] + ' ' + article['description']) for article in articles)
         avg_score = total_score / len(articles)
-        overall_sentiment = max(set(sentiments), key=sentiments.count)
+        
+        if avg_score > 0.5:
+            overall_sentiment = "Very Positive"
+        elif 0.1 <= avg_score <= 0.5:
+            overall_sentiment = "Positive"
+        elif -0.1 < avg_score < 0.1:
+            overall_sentiment = "Neutral"
+        elif -0.5 <= avg_score <= -0.1:
+            overall_sentiment = "Negative"
+        else:
+            overall_sentiment = "Very Negative"
+        
         return overall_sentiment, avg_score
     except Exception as e:
         logger.error(f"Error in overall sentiment calculation: {str(e)}")
@@ -265,7 +257,7 @@ def main():
 
                     st.subheader("Sentiment Analysis")
                     with st.spinner("Fetching and analyzing news articles..."):
-                        articles = fetch_news_articles(symbol)
+                        articles = fetch_news_articles(symbol, num_articles=5)
                         if articles:
                             overall_sentiment, avg_score = get_overall_sentiment(articles)
                             sentiment_emoji = {
@@ -280,7 +272,7 @@ def main():
                             st.write(f"Average Sentiment Score: {avg_score:.2f}")
 
                             st.subheader("Recent News Articles")
-                            for article in articles[:3]:
+                            for article in articles:
                                 st.write(f"**{article['title']}**")
                                 st.write(f"Source: {article['source']['name']}")
                                 st.write(f"Published: {article['publishedAt']}")
