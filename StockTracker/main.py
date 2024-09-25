@@ -16,14 +16,19 @@ from alpha_vantage.fundamentaldata import FundamentalData
 import hashlib
 import json
 import logging
+import spacy
+from bs4 import BeautifulSoup
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 try:
     nltk.download('vader_lexicon', quiet=True)
+    nlp = spacy.load("en_core_web_sm")
+    logger.info("Successfully loaded spaCy NLP model")
 except Exception as e:
-    logger.error(f"Failed to download NLTK data: {str(e)}")
+    logger.error(f"Failed to load spaCy NLP model: {str(e)}")
+    nlp = None
 
 st.set_page_config(
     page_title='Stock Data Visualization',
@@ -33,7 +38,7 @@ st.set_page_config(
 )
 
 ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY")
-NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "YOUR_NEWS_API_KEY")
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
 
 def fetch_all_stock_symbols():
     try:
@@ -56,7 +61,6 @@ def fetch_stock_data(symbol, start_date, end_date):
         hist = stock.history(start=start_date, end=end_date)
         info = stock.info
         
-        # Extract more detailed information
         detailed_info = {
             'longName': info.get('longName', 'N/A'),
             'sector': info.get('sector', 'N/A'),
@@ -86,75 +90,157 @@ def fetch_stock_data(symbol, start_date, end_date):
         logger.error(f"Error fetching data for {symbol}: {str(e)}")
         return None, None
 
-@st.cache_data(ttl=3600)
-def fetch_news_articles(symbol, num_articles=5):
+def check_article_relevance(article, company_name, symbol):
+    logger.debug(f"Checking relevance for article: {article.get('title', 'No title')}")
+    
+    title = article.get('title', '').lower()
+    description = article.get('description', '').lower()
+    content = title + ' ' + description
+    
+    if nlp:
+        try:
+            doc = nlp(content)
+            entities = [ent.text.lower() for ent in doc.ents if ent.label_ in ['ORG', 'PRODUCT']]
+            
+            company_words = company_name.lower().split()
+            is_relevant = any(word in entities for word in company_words) or symbol.lower() in entities
+        except Exception as e:
+            logger.error(f"Error in NLP processing: {str(e)}")
+            is_relevant = False
+    else:
+        company_words = company_name.lower().split()
+        is_relevant = any(word in content for word in company_words) or symbol.lower() in content
+    
+    stock_keywords = ['stock', 'shares', 'market', 'investor', 'finance', 'earnings', 'revenue', 'profit', 'loss']
+    has_stock_keyword = any(keyword in content for keyword in stock_keywords)
+    
+    relevance_score = (is_relevant or has_stock_keyword)
+    logger.debug(f"Article relevance: {relevance_score}")
+    return relevance_score
+
+def fetch_news_articles_fallback(symbol, company_name):
+    logger.info(f"Using fallback method to fetch news for {symbol} ({company_name})")
     try:
-        url = f"https://newsapi.org/v2/everything?q={symbol}&apiKey={NEWS_API_KEY}&language=en&sortBy=publishedAt&pageSize={num_articles * 2}"
+        url = f"https://finance.yahoo.com/quote/{symbol}/news"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        articles = []
+        
+        for item in soup.find_all('li', class_='js-stream-content'):
+            title = item.find('h3').text if item.find('h3') else ''
+            link = item.find('a')['href'] if item.find('a') else ''
+            description = item.find('p').text if item.find('p') else ''
+            pub_date = item.find('span', class_='C(#959595)').text if item.find('span', class_='C(#959595)') else ''
+            
+            if title and link:
+                articles.append({
+                    'title': title,
+                    'url': f"https://finance.yahoo.com{link}" if link.startswith('/') else link,
+                    'description': description,
+                    'source': {'name': 'Yahoo Finance'},
+                    'publishedAt': pub_date
+                })
+        
+        logger.info(f"Fetched {len(articles)} articles from Yahoo Finance")
+        return articles[:5]
+    except Exception as e:
+        logger.error(f"Error in fallback news fetching for {symbol}: {str(e)}")
+        return []
+
+@st.cache_data(ttl=3600)
+def fetch_news_articles(symbol, company_name, num_articles=5):
+    logger.info(f"Fetching news articles for {symbol} ({company_name})")
+    try:
+        if not NEWS_API_KEY:
+            logger.warning("NEWS_API_KEY is not set. Using fallback method.")
+            return fetch_news_articles_fallback(symbol, company_name)
+
+        query = f'"{company_name}" OR {symbol}'
+        url = f"https://newsapi.org/v2/everything?q={query}&apiKey={NEWS_API_KEY}&language=en&sortBy=publishedAt&pageSize=20"
+        
+        logger.debug(f"Sending request to News API: {url}")
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         articles = response.json().get('articles', [])
-        
-        # Remove duplicate articles based on title
-        unique_articles = []
-        seen_titles = set()
+        logger.info(f"Fetched {len(articles)} articles from News API")
+
+        if not articles:
+            logger.warning("No articles found from News API, using fallback method")
+            return fetch_news_articles_fallback(symbol, company_name)
+
+        relevant_articles = []
         for article in articles:
-            if article['title'] not in seen_titles:
-                unique_articles.append(article)
-                seen_titles.add(article['title'])
-                if len(unique_articles) == num_articles:
+            if check_article_relevance(article, company_name, symbol):
+                try:
+                    news_article = Article(article['url'])
+                    news_article.download()
+                    news_article.parse()
+                    article['full_text'] = news_article.text
+                    logger.debug(f"Successfully fetched full text for article: {article['url']}")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch full text for article: {str(e)}")
+                    article['full_text'] = article.get('description', '')
+                
+                relevant_articles.append(article)
+                if len(relevant_articles) == num_articles:
                     break
         
-        return unique_articles
+        logger.info(f"Found {len(relevant_articles)} relevant articles")
+        return relevant_articles
     except RequestException as e:
         logger.error(f"Error fetching news for {symbol}: {str(e)}")
-        return []
+        return fetch_news_articles_fallback(symbol, company_name)
     except Exception as e:
-        logger.error(f"Unexpected error fetching news for {symbol}: {str(e)}")
-        return []
+        logger.error(f"Unexpected error fetching news for {symbol}: {str(e)}", exc_info=True)
+        return fetch_news_articles_fallback(symbol, company_name)
 
 def analyze_sentiment(text):
     try:
+        if text is None:
+            return {'compound': 0, 'pos': 0, 'neu': 0, 'neg': 0}
         sia = SentimentIntensityAnalyzer()
         sentiment_scores = sia.polarity_scores(text)
-        compound_score = sentiment_scores['compound']
-        return compound_score
+        return sentiment_scores
     except Exception as e:
-        logger.error(f"Error in sentiment analysis: {str(e)}")
-        return 0
+        logger.error(f'Error in sentiment analysis: {str(e)}')
+        return {'compound': 0, 'pos': 0, 'neu': 0, 'neg': 0}
 
 @st.cache_data(ttl=3600)
 def get_overall_sentiment(articles):
     if not articles:
-        return "N/A", 0
+        return "N/A", {'compound': 0, 'pos': 0, 'neu': 0, 'neg': 0}
 
     try:
-        total_score = sum(analyze_sentiment(article['title'] + ' ' + article['description']) for article in articles)
+        total_scores = {'compound': 0, 'pos': 0, 'neu': 0, 'neg': 0}
+        for article in articles:
+            scores = analyze_sentiment((article.get('title') or '') + ' ' + (article.get('description') or '') + ' ' + (article.get('full_text') or ''))
+            for key in total_scores:
+                total_scores[key] += scores[key]
+        
         num_articles = len(articles)
+        avg_scores = {key: value / num_articles for key, value in total_scores.items()}
         
-        if num_articles == 0:
-            return "N/A", 0
-        
-        avg_score = total_score / num_articles
-        
-        if avg_score > 0.5:
+        compound_score = avg_scores['compound']
+        if compound_score > 0.5:
             overall_sentiment = "Very Positive"
-        elif 0.1 <= avg_score <= 0.5:
+        elif 0.1 <= compound_score <= 0.5:
             overall_sentiment = "Positive"
-        elif -0.1 < avg_score < 0.1:
+        elif -0.1 < compound_score < 0.1:
             overall_sentiment = "Neutral"
-        elif -0.5 <= avg_score <= -0.1:
+        elif -0.5 <= compound_score <= -0.1:
             overall_sentiment = "Negative"
         else:
             overall_sentiment = "Very Negative"
         
-        return overall_sentiment, avg_score
+        return overall_sentiment, avg_scores
     except Exception as e:
         logger.error(f"Error in overall sentiment calculation: {str(e)}")
-        return "Error", 0
+        return "Error", {'compound': 0, 'pos': 0, 'neu': 0, 'neg': 0}
 
 def main():
     st.title("Stock Data Visualization App")
-    st.write("Main function called successfully!")
 
     is_mobile = st.checkbox('Mobile view', value=False, key='mobile_view')
 
@@ -223,7 +309,6 @@ def main():
                 if hist_data is not None and info is not None:
                     st.subheader(f"Stock Information for {symbol}")
                     
-                    # Company Overview
                     st.write("### Company Overview")
                     st.write(f"Company Name: {info['longName']}")
                     st.write(f"Sector: {info['sector']}")
@@ -232,7 +317,6 @@ def main():
                     st.write(f"Website: [{info['website']}]({info['website']})")
                     st.write(f"Full-time Employees: {info['fullTimeEmployees']:,}")
 
-                    # Financial Metrics
                     st.write("### Financial Metrics")
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -248,7 +332,6 @@ def main():
                         st.metric("Current Ratio", f"{info['currentRatio']:.2f}" if isinstance(info['currentRatio'], (int, float)) else 'N/A')
                         st.metric("Quick Ratio", f"{info['quickRatio']:.2f}" if isinstance(info['quickRatio'], (int, float)) else 'N/A')
 
-                    # Stock Performance
                     st.write("### Stock Performance")
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -273,9 +356,9 @@ def main():
 
                     st.subheader("Sentiment Analysis")
                     with st.spinner("Fetching and analyzing news articles..."):
-                        articles = fetch_news_articles(symbol, num_articles=5)
+                        articles = fetch_news_articles(symbol, info['longName'], num_articles=5)
                         if articles:
-                            overall_sentiment, avg_score = get_overall_sentiment(articles)
+                            overall_sentiment, avg_scores = get_overall_sentiment(articles)
                             sentiment_emoji = {
                                 "Very Positive": ":star-struck:",
                                 "Positive": ":smile:",
@@ -285,16 +368,21 @@ def main():
                                 "Error": ":warning:"
                             }
                             st.write(f"Overall Sentiment: {overall_sentiment} {sentiment_emoji.get(overall_sentiment, '')}")
-                            st.write(f"Average Sentiment Score: {avg_score:.2f}")
+                            
+                            col1, col2, col3, col4 = st.columns(4)
+                            col1.metric("Compound Score", f"{avg_scores['compound']:.2f}")
+                            col2.metric("Positive", f"{avg_scores['pos']:.2f}")
+                            col3.metric("Neutral", f"{avg_scores['neu']:.2f}")
+                            col4.metric("Negative", f"{avg_scores['neg']:.2f}")
 
                             st.subheader("Recent News Articles")
                             for article in articles:
-                                st.write(f"**{article['title']}**")
-                                st.write(f"Source: {article['source']['name']}")
-                                st.write(f"Published: {article['publishedAt']}")
-                                st.write(article['description'])
-                                st.markdown(f"[Read More at {article['source']['name']} ↗]({article['url']})", unsafe_allow_html=True)
-                                st.write('---')
+                                with st.expander(f"{article['title']} - {article['source']['name']}"):
+                                    st.write(f"Published: {article['publishedAt']}")
+                                    st.write(article.get('description', 'No description available'))
+                                    article_sentiment = analyze_sentiment((article.get('title') or '') + ' ' + (article.get('description') or '') + ' ' + (article.get('full_text') or ''))
+                                    st.write(f"Article Sentiment: {article_sentiment['compound']:.2f}")
+                                    st.markdown(f"[Read More at {article['source']['name']} ↗]({article['url']})", unsafe_allow_html=True)
                         else:
                             st.warning("No recent news articles found for this stock.")
                 else:
