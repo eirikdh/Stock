@@ -42,7 +42,7 @@ NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
 
 def fetch_all_stock_symbols():
     try:
-        with open('StockTracker/all_tickers.txt', 'r') as file:
+        with open('Stock/Tracker/all_tickers.txt', 'r') as file:
             return [line.strip() for line in file if line.strip()]
     except FileNotFoundError:
         logger.warning("all_tickers.txt not found. Using fallback symbols.")
@@ -60,6 +60,17 @@ def fetch_stock_data(symbol, start_date, end_date):
         stock = yf.Ticker(symbol)
         hist = stock.history(start=start_date, end=end_date)
         info = stock.info
+        
+        five_years_ago = datetime.now() - timedelta(days=5*365)
+        pe_history = pd.DataFrame()
+        try:
+            pe_history = stock.get_info()['forwardPE']
+            pe_history = pd.DataFrame({
+                'Date': [datetime.now()],
+                'Forward P/E': [pe_history]
+            }).set_index('Date')
+        except Exception as e:
+            logger.warning(f"Unable to fetch historical P/E ratio data for {symbol}: {str(e)}")
         
         detailed_info = {
             'longName': info.get('longName', 'N/A'),
@@ -83,6 +94,7 @@ def fetch_stock_data(symbol, start_date, end_date):
             'fiftyTwoWeekLow': info.get('fiftyTwoWeekLow', 'N/A'),
             'averageVolume': info.get('averageVolume', 'N/A'),
             'fullTimeEmployees': info.get('fullTimeEmployees', 'N/A'),
+            'peHistory': pe_history,
         }
         
         return hist, detailed_info
@@ -119,7 +131,6 @@ def fetch_news_articles_fallback(symbol, company_name):
     logger.info(f"Using fallback method to fetch news for {symbol} ({company_name})")
     articles = []
     
-    # Yahoo Finance
     try:
         url = f"https://finance.yahoo.com/quote/{symbol}/news"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
@@ -149,7 +160,6 @@ def fetch_news_articles_fallback(symbol, company_name):
     except Exception as e:
         logger.error(f"Error fetching news from Yahoo Finance for {symbol}: {str(e)}")
     
-    # Google News (as an alternative source)
     if len(articles) < 5:
         try:
             url = f"https://news.google.com/rss/search?q={symbol}+OR+{company_name}+when:7d&hl=en-US&gl=US&ceid=US:en"
@@ -157,7 +167,7 @@ def fetch_news_articles_fallback(symbol, company_name):
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'xml')
             
-            for item in soup.find_all('item')[:10]:  # Limit to 10 items
+            for item in soup.find_all('item')[:10]:
                 try:
                     title = item.title.text if item.title else ''
                     link = item.link.text if item.link else ''
@@ -373,6 +383,38 @@ def main():
                         st.metric("52 Week Low", f"${info['fiftyTwoWeekLow']:.2f}" if isinstance(info['fiftyTwoWeekLow'], (int, float)) else 'N/A')
                     with col3:
                         st.metric("Average Volume", f"{info['averageVolume']:,.0f}" if isinstance(info['averageVolume'], (int, float)) else 'N/A')
+
+                    st.write("### Forward P/E Analysis")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Current Forward P/E", f"{info['forwardPE']:.2f}" if isinstance(info['forwardPE'], (int, float)) else 'N/A')
+                    with col2:
+                        if isinstance(info['forwardPE'], (int, float)) and isinstance(info['trailingPE'], (int, float)):
+                            pe_difference = info['forwardPE'] - info['trailingPE']
+                            st.metric("Forward P/E vs Trailing P/E", f"{pe_difference:.2f}", 
+                                      delta=f"{pe_difference:.2f}", delta_color="inverse")
+                        else:
+                            st.metric("Forward P/E vs Trailing P/E", "N/A")
+
+                    if not info['peHistory'].empty:
+                        st.write("#### Forward P/E Trend")
+                        fig = go.Figure(data=go.Scatter(x=info['peHistory'].index, y=info['peHistory']['Forward P/E'], mode='lines+markers'))
+                        fig.update_layout(
+                            title=f"{symbol} Forward P/E Ratio",
+                            xaxis_title="Date",
+                            yaxis_title="Forward P/E Ratio",
+                            height=400
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        current_pe = info['forwardPE']
+                        if isinstance(current_pe, (int, float)):
+                            st.write(f"Current Forward P/E: {current_pe:.2f}")
+                            st.write("Note: Historical P/E data is limited. For a more comprehensive analysis, consider using financial data providers or accessing historical financial reports.")
+                        else:
+                            st.write("Unable to provide Forward P/E analysis due to missing data.")
+                    else:
+                        st.write("No historical Forward P/E data available.")
 
                     st.write("### Price History")
                     fig = go.Figure(data=go.Scatter(x=hist_data.index, y=hist_data['Close'], mode='lines'))
