@@ -42,7 +42,7 @@ NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
 
 def fetch_all_stock_symbols():
     try:
-        with open('StockTracker/all_tickers.txt', 'r') as file:
+        with open('all_tickers.txt', 'r') as file:
             return [line.strip() for line in file if line.strip()]
     except FileNotFoundError:
         logger.warning("all_tickers.txt not found. Using fallback symbols.")
@@ -211,25 +211,27 @@ def fetch_news_articles(symbol, company_name, num_articles=5):
             logger.warning("No articles found from News API, using fallback method")
             return fetch_news_articles_fallback(symbol, company_name)
 
-        relevant_articles = []
+        unique_articles = {}
         for article in articles:
             if check_article_relevance(article, company_name, symbol):
-                try:
-                    news_article = Article(article['url'])
-                    news_article.download()
-                    news_article.parse()
-                    article['full_text'] = news_article.text
-                    logger.debug(f"Successfully fetched full text for article: {article['url']}")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch full text for article: {str(e)}")
-                    article['full_text'] = article.get('description', '')
-                
-                relevant_articles.append(article)
-                if len(relevant_articles) == num_articles:
-                    break
+                article_url = article['url']
+                if article_url not in unique_articles:
+                    try:
+                        news_article = Article(article_url)
+                        news_article.download()
+                        news_article.parse()
+                        article['full_text'] = news_article.text
+                        logger.debug(f"Successfully fetched full text for article: {article_url}")
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch full text for article: {str(e)}")
+                        article['full_text'] = article.get('description', '')
+                    
+                    unique_articles[article_url] = article
+                    if len(unique_articles) == num_articles:
+                        break
         
-        logger.info(f"Found {len(relevant_articles)} relevant articles")
-        return relevant_articles
+        logger.info(f"Found {len(unique_articles)} unique relevant articles")
+        return list(unique_articles.values())
     except RequestException as e:
         logger.error(f"Error fetching news for {symbol}: {str(e)}")
         return fetch_news_articles_fallback(symbol, company_name)
