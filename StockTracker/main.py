@@ -19,7 +19,7 @@ import logging
 import spacy
 from bs4 import BeautifulSoup
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 try:
@@ -91,13 +91,9 @@ def fetch_stock_data(symbol, start_date, end_date):
         return None, None
 
 def check_article_relevance(article, company_name, symbol):
-    logger.debug(f"Checking relevance for article: {article.get('title', 'No title')}")
-    
     title = article.get('title', '').lower() if article.get('title') else ''
     description = article.get('description', '').lower() if article.get('description') else ''
     content = title + ' ' + description
-    
-    logger.debug(f"Article content: {content[:100]}...")  # Log the first 100 characters of the content
     
     if nlp:
         try:
@@ -106,22 +102,17 @@ def check_article_relevance(article, company_name, symbol):
             
             company_words = company_name.lower().split() if company_name else []
             is_relevant = any(word in entities for word in company_words) or symbol.lower() in entities
-            
-            logger.debug(f"Entities found: {entities}")
-            logger.debug(f"Is relevant (NLP): {is_relevant}")
         except Exception as e:
             logger.error(f"Error in NLP processing: {str(e)}")
             is_relevant = False
     else:
         company_words = company_name.lower().split() if company_name else []
         is_relevant = any(word in content for word in company_words) or symbol.lower() in content
-        logger.debug(f"Is relevant (keyword): {is_relevant}")
     
     stock_keywords = ['stock', 'shares', 'market', 'investor', 'finance', 'earnings', 'revenue', 'profit', 'loss']
     has_stock_keyword = any(keyword in content for keyword in stock_keywords)
     
     relevance_score = (is_relevant or has_stock_keyword)
-    logger.debug(f"Article relevance: {relevance_score}")
     return relevance_score
 
 def fetch_news_articles_fallback(symbol, company_name):
@@ -201,7 +192,6 @@ def fetch_news_articles(symbol, company_name, num_articles=5):
         query = f'"{company_name}" OR {symbol}'
         url = f"https://newsapi.org/v2/everything?q={query}&apiKey={NEWS_API_KEY}&language=en&sortBy=publishedAt&pageSize=20"
         
-        logger.debug(f"Sending request to News API: {url}")
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         articles = response.json().get('articles', [])
@@ -221,7 +211,7 @@ def fetch_news_articles(symbol, company_name, num_articles=5):
                         news_article.download()
                         news_article.parse()
                         article['full_text'] = news_article.text
-                        logger.debug(f"Successfully fetched full text for article: {article_url}")
+                        logger.info(f"Successfully fetched full text for article: {article_url}")
                     except Exception as e:
                         logger.warning(f"Failed to fetch full text for article: {str(e)}")
                         article['full_text'] = article.get('description', '')
