@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import time
@@ -18,6 +19,7 @@ import json
 import logging
 import spacy
 from bs4 import BeautifulSoup
+from typing import List, Dict, Tuple, Optional
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -40,21 +42,21 @@ st.set_page_config(
 ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY")
 NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
 
-def fetch_all_stock_symbols():
+def fetch_all_stock_symbols() -> List[str]:
     try:
-        with open('StockTracker/all_tickers.txt', 'r') as file:
+        with open('all_tickers.txt', 'r') as file:
             return [line.strip() for line in file if line.strip()]
     except FileNotFoundError:
         logger.warning("all_tickers.txt not found. Using fallback symbols.")
         return ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'JNJ', 'V', 'NFLX', 'DIS', 'ADBE', 'CRM', 'PYPL', 'NAS.OL']
 
 @st.cache_data(ttl=86400)
-def load_stock_symbols():
+def load_stock_symbols() -> List[str]:
     return fetch_all_stock_symbols()
 
 STOCK_SYMBOLS = load_stock_symbols()
 
-def fetch_alpha_vantage_data(symbol):
+def fetch_alpha_vantage_data(symbol: str) -> Tuple[Optional[Dict], Optional[Dict], Optional[Dict]]:
     try:
         fd = FundamentalData(key=ALPHA_VANTAGE_API_KEY)
         
@@ -67,7 +69,7 @@ def fetch_alpha_vantage_data(symbol):
         logger.error(f"Error fetching Alpha Vantage data for {symbol}: {str(e)}")
         return None, None, None
 
-def calculate_historical_forward_pe(income_statement, current_price):
+def calculate_historical_forward_pe(income_statement: List[Dict], current_price: float) -> pd.DataFrame:
     try:
         eps_data = []
         for statement in income_statement:
@@ -82,7 +84,7 @@ def calculate_historical_forward_pe(income_statement, current_price):
         logger.error(f"Error calculating historical Forward P/E: {str(e)}")
         return pd.DataFrame()
 
-def fetch_analyst_recommendations(symbol):
+def fetch_analyst_recommendations(symbol: str) -> Optional[pd.DataFrame]:
     try:
         stock = yf.Ticker(symbol)
         return stock.recommendations
@@ -90,7 +92,7 @@ def fetch_analyst_recommendations(symbol):
         logger.error(f"Error fetching analyst recommendations for {symbol}: {str(e)}")
         return None
 
-def fetch_stock_data(symbol, start_date, end_date):
+def fetch_stock_data(symbol: str, start_date: datetime, end_date: datetime) -> Tuple[Optional[pd.DataFrame], Optional[Dict]]:
     try:
         logger.info(f"Fetching data for {symbol} from {start_date} to {end_date}")
         stock = yf.Ticker(symbol)
@@ -148,7 +150,7 @@ def fetch_stock_data(symbol, start_date, end_date):
         logger.error(f"Error fetching data for {symbol}: {str(e)}")
         return None, None
 
-def check_article_relevance(article, company_name, symbol):
+def check_article_relevance(article: Dict, company_name: str, symbol: str) -> bool:
     title = article.get('title', '').lower() if article.get('title') else ''
     description = article.get('description', '').lower() if article.get('description') else ''
     content = title + ' ' + description
@@ -173,7 +175,7 @@ def check_article_relevance(article, company_name, symbol):
     relevance_score = (is_relevant or has_stock_keyword)
     return relevance_score
 
-def fetch_news_articles_fallback(symbol, company_name):
+def fetch_news_articles_fallback(symbol: str, company_name: str) -> List[Dict]:
     logger.info(f"Using fallback method to fetch news for {symbol} ({company_name})")
     articles = []
     
@@ -238,7 +240,7 @@ def fetch_news_articles_fallback(symbol, company_name):
     return articles[:5]
 
 @st.cache_data(ttl=3600)
-def fetch_news_articles(symbol, company_name, num_articles=5):
+def fetch_news_articles(symbol: str, company_name: str, num_articles: int = 5) -> List[Dict]:
     logger.info(f"Fetching news articles for {symbol} ({company_name})")
     try:
         if not NEWS_API_KEY:
@@ -285,7 +287,7 @@ def fetch_news_articles(symbol, company_name, num_articles=5):
         logger.error(f"Unexpected error fetching news for {symbol}: {str(e)}", exc_info=True)
         return fetch_news_articles_fallback(symbol, company_name)
 
-def analyze_sentiment(text):
+def analyze_sentiment(text: Optional[str]) -> Dict[str, float]:
     try:
         if text is None:
             return {'compound': 0, 'pos': 0, 'neu': 0, 'neg': 0}
@@ -297,7 +299,7 @@ def analyze_sentiment(text):
         return {'compound': 0, 'pos': 0, 'neu': 0, 'neg': 0}
 
 @st.cache_data(ttl=3600)
-def get_overall_sentiment(articles):
+def get_overall_sentiment(articles: List[Dict]) -> Tuple[str, Dict[str, float]]:
     if not articles:
         return "N/A", {'compound': 0, 'pos': 0, 'neu': 0, 'neg': 0}
 
@@ -328,7 +330,7 @@ def get_overall_sentiment(articles):
         logger.error(f"Error in overall sentiment calculation: {str(e)}")
         return "Error", {'compound': 0, 'pos': 0, 'neu': 0, 'neg': 0}
 
-def display_stock_info(symbol, hist_data, info, is_mobile):
+def display_stock_info(symbol: str, hist_data: pd.DataFrame, info: Dict, is_mobile: bool) -> None:
     st.subheader(f"Stock Information for {symbol}")
     
     st.write("### Company Overview")
@@ -391,10 +393,14 @@ def display_stock_info(symbol, hist_data, info, is_mobile):
 
         current_pe = info['forwardPE']
         if isinstance(current_pe, (int, float)):
-            if current_pe > avg_pe:
-                st.write(f"The current Forward P/E ({current_pe:.2f}) is higher than the 5-year average ({avg_pe:.2f}), suggesting the stock might be overvalued compared to its historical valuation.")
+            if current_pe > avg_pe * 1.2:
+                st.write(f"The current Forward P/E ({current_pe:.2f}) is significantly higher than the 5-year average ({avg_pe:.2f}), suggesting the stock might be overvalued compared to its historical valuation.")
+            elif current_pe > avg_pe:
+                st.write(f"The current Forward P/E ({current_pe:.2f}) is higher than the 5-year average ({avg_pe:.2f}), suggesting the stock might be slightly overvalued compared to its historical valuation.")
+            elif current_pe < avg_pe * 0.8:
+                st.write(f"The current Forward P/E ({current_pe:.2f}) is significantly lower than the 5-year average ({avg_pe:.2f}), suggesting the stock might be undervalued compared to its historical valuation.")
             elif current_pe < avg_pe:
-                st.write(f"The current Forward P/E ({current_pe:.2f}) is lower than the 5-year average ({avg_pe:.2f}), suggesting the stock might be undervalued compared to its historical valuation.")
+                st.write(f"The current Forward P/E ({current_pe:.2f}) is lower than the 5-year average ({avg_pe:.2f}), suggesting the stock might be slightly undervalued compared to its historical valuation.")
             else:
                 st.write(f"The current Forward P/E ({current_pe:.2f}) is close to the 5-year average ({avg_pe:.2f}), suggesting the stock is trading near its historical valuation.")
         else:
@@ -417,7 +423,7 @@ def display_stock_info(symbol, hist_data, info, is_mobile):
         else:
             st.metric("Profit Margin", "N/A")
 
-    if info['analyst_recommendations'] is not None:
+    if info['analyst_recommendations'] is not None and not info['analyst_recommendations'].empty:
         st.write("### Analyst Recommendations")
         st.dataframe(info['analyst_recommendations'].tail())
 
@@ -508,9 +514,9 @@ def main():
         input_type = st.radio("Choose input method:", ("Dropdown", "Custom"))
         
         if input_type == "Dropdown":
-            symbol = st.selectbox("Select a stock symbol:", STOCK_SYMBOLS, index=STOCK_SYMBOLS.index('DIS') if 'DIS' in STOCK_SYMBOLS else 0)
+            symbol = st.selectbox("Select a stock symbol:", STOCK_SYMBOLS, index=STOCK_SYMBOLS.index('AAPL') if 'AAPL' in STOCK_SYMBOLS else 0)
         else:
-            symbol = st.text_input("Enter custom stock symbol:", "DIS").upper()
+            symbol = st.text_input("Enter custom stock symbol:", "AAPL").upper()
 
         if symbol and symbol not in STOCK_SYMBOLS:
             st.warning(f"The symbol '{symbol}' is not in our list of known stocks. Please make sure it's correct.")
