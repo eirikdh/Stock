@@ -461,7 +461,7 @@ def display_stock_info(symbol: str, hist_data: pd.DataFrame, info: Dict, is_mobi
             col3.metric("Neutral", f"{avg_scores['neu']:.2f}")
             col4.metric("Negative", f"{avg_scores['neg']:.2f}")
 
-            st.subheader("10")
+            st.subheader("-")
             for article in articles:
                 with st.expander(f"{article['title']} - {article['source']['name']}"):
                     st.write(f"Published: {article['publishedAt']}")
