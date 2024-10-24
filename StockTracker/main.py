@@ -215,7 +215,7 @@ def fetch_news_articles_fallback(symbol: str, company_name: str) -> List[Dict]:
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'xml')
             
-            for item in soup.find_all('item')[:10]:
+            for item in soup.find_all('item')[:25]:
                 try:
                     title = item.title.text if item.title else ''
                     link = item.link.text if item.link else ''
@@ -461,7 +461,7 @@ def display_stock_info(symbol: str, hist_data: pd.DataFrame, info: Dict, is_mobi
             col3.metric("Neutral", f"{avg_scores['neu']:.2f}")
             col4.metric("Negative", f"{avg_scores['neg']:.2f}")
 
-            st.subheader("Recent News Articles")
+            st.subheader("10")
             for article in articles:
                 with st.expander(f"{article['title']} - {article['source']['name']}"):
                     st.write(f"Published: {article['publishedAt']}")
@@ -470,7 +470,7 @@ def display_stock_info(symbol: str, hist_data: pd.DataFrame, info: Dict, is_mobi
                     st.write(f"Article Sentiment: {article_sentiment['compound']:.2f}")
                     st.markdown(f"[Read More at {article['source']['name']} ↗]({article['url']})", unsafe_allow_html=True)
         else:
-            st.warning("No recent news articles found for this stock.")
+            st.warning("No 10 found for this stock.")
 
 def main():
     st.title("Stock Data Visualization App")
