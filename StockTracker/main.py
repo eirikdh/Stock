@@ -215,7 +215,7 @@ def fetch_news_articles_fallback(symbol: str, company_name: str) -> List[Dict]:
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'xml')
             
-            for item in soup.find_all('item')[:25]:
+            for item in soup.find_all('item')[:10]:
                 try:
                     title = item.title.text if item.title else ''
                     link = item.link.text if item.link else ''
@@ -240,7 +240,7 @@ def fetch_news_articles_fallback(symbol: str, company_name: str) -> List[Dict]:
     return articles[:5]
 
 @st.cache_data(ttl=3600)
-def fetch_news_articles(symbol: str, company_name: str, num_articles: int = 5) -> List[Dict]:
+def fetch_news_articles(symbol: str, company_name: str, num_articles: int = 10) -> List[Dict]:
     logger.info(f"Fetching news articles for {symbol} ({company_name})")
     try:
         if not NEWS_API_KEY:
