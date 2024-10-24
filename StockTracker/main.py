@@ -314,13 +314,13 @@ def get_overall_sentiment(articles: List[Dict]) -> Tuple[str, Dict[str, float]]:
         avg_scores = {key: value / num_articles for key, value in total_scores.items()}
         
         compound_score = avg_scores['compound']
-        if compound_score > 0.5:
+        if compound_score > 0.4:
             overall_sentiment = "Very Positive"
-        elif 0.1 <= compound_score <= 0.5:
+        elif 0.1 <= compound_score <= 0.4:
             overall_sentiment = "Positive"
         elif -0.1 < compound_score < 0.1:
             overall_sentiment = "Neutral"
-        elif -0.5 <= compound_score <= -0.1:
+        elif -0.4 <= compound_score <= -0.1:
             overall_sentiment = "Negative"
         else:
             overall_sentiment = "Very Negative"
