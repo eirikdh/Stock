@@ -69,8 +69,8 @@ def fetch_alpha_vantage_data(symbol: str) -> Tuple[Optional[Dict], Optional[Dict
         logger.error(f"Error fetching Alpha Vantage data for {symbol}: {str(e)}")
         return None, None, None
 
-def calculate_historical_forward_pe(income_statement: List[Dict], current_price: float) -> pd.DataFrame:
-    if not df.empty:
+df = calculate_historical_forward_pe(income_statement, current_price)
+if not df.empty:
     try:
         eps_data = []
         for statement in income_statement:
