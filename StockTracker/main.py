@@ -74,7 +74,7 @@ def calculate_historical_forward_pe(income_statement: List[Dict], current_price:
         eps_data = []
         for statement in income_statement:
             fiscal_date = statement.get('fiscalDateEnding')
-            eps = float(statement.get('eps', 0))
+            eps = float(statement.get('eps', 0) or 0)
             if eps > 0:
                 forward_pe = current_price / eps
                 eps_data.append({'date': fiscal_date, 'forward_pe': forward_pe})
